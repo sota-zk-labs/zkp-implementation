@@ -3,7 +3,11 @@ use std::{sync::Arc, usize, vec};
 use ark_bls12_381::Fr;
 use ark_ff::{Zero, One};
 use ark_poly::{domain, EvaluationDomain, Evaluations, GeneralEvaluationDomain};
-use crate::{constrain::{CopyConstrains, GateConstrains}, errors::CustomError, gate::Gate, srs::Srs, variable::Variable, CompiledCircuit};
+use crate::CompiledCircuit;
+use crate::constrain::{CopyConstraints, GateConstraints};
+use crate::errors::CustomError;
+use crate::gate::Gate;
+use crate::srs::Srs;
 
 struct Circuit {
     gates: Vec<Gate>,
@@ -18,23 +22,6 @@ impl Circuit<> {
         }
     }
 
-    // fn unwrap_value(&mut self, x: Variable<Fr>) -> Result<usize, CustomError> {
-        
-    //     let res = match x {
-    //         Variable::Index(id) => {
-    //             if id >= self.vals.len() {
-    //                 return Err(CustomError::AssignmentIndexMissing);
-    //             }
-    //             id
-    //         },
-    //         Variable::Value(x) => {
-    //             self.vals.push(x);
-    //             let sz = self.vals.len() - 1;
-    //             sz
-    //         }
-    //     };
-    //     Ok(res)
-    // }
 
     pub(crate) fn add_an_add_gate(
         &mut self, 
@@ -43,30 +30,12 @@ impl Circuit<> {
         c: (usize, usize, Fr),
         pi: Fr
     ) -> Result<(), CustomError> {
-        
-        self.vals[0].push(a.2);
-        self.vals[1].push(b.2);
-        self.vals[2].push(c.2);
+
+        Arc::get_mut(&mut self.vals[0]).unwrap().push(a.2);
+        Arc::get_mut(&mut self.vals[1]).unwrap().push(b.2);
+        Arc::get_mut(&mut self.vals[2]).unwrap().push(c.2);
 
         let gate = Gate::new_add_gate((a.0, a.1), (b.0, b.1), (c.0, c.1), Some(pi));
-        self.gates.push(gate);
-        Ok(())   
-    }
-
-    pub(crate) fn add_an_add_constant_gate(
-        &mut self, 
-        a: (usize, usize, Fr), 
-        b: (usize, usize, Fr),
-        c: (usize, usize, Fr),
-        constant: Fr,
-        pi: Fr
-    ) -> Result<(), CustomError> {
-        
-        self.vals[0].push(a.2);
-        self.vals[1].push(b.2);
-        self.vals[2].push(c.2);
-
-        let gate = Gate::new_add_constant_gate((a.0, a.1), (b.0, b.1), (c.0, c.1), Some(constant), Some(pi));
         self.gates.push(gate);
         Ok(())   
     }
@@ -78,36 +47,19 @@ impl Circuit<> {
         c: (usize, usize, Fr),
         pi: Fr
     ) -> Result<(), CustomError> {
-        
-        self.vals[0].push(a.2);
-        self.vals[1].push(b.2);
-        self.vals[2].push(c.2);
+
+        Arc::get_mut(&mut self.vals[0]).unwrap().push(a.2);
+        Arc::get_mut(&mut self.vals[1]).unwrap().push(b.2);
+        Arc::get_mut(&mut self.vals[2]).unwrap().push(c.2);
 
         let gate = Gate::new_mult_gate((a.0, a.1), (b.0, b.1), (c.0, c.1), Some(pi));
         self.gates.push(gate);
         Ok(())   
     }
 
-    pub(crate) fn add_a_mult_constant_gate(
-        &mut self, 
-        a: (usize, usize, Fr), 
-        b: (usize, usize, Fr),
-        c: (usize, usize, Fr),
-        constant: Fr,
-        pi: Fr
-    ) -> Result<(), CustomError> {
-        
-        self.vals[0].push(a.2);
-        self.vals[1].push(b.2);
-        self.vals[2].push(c.2);
-
-        let gate = Gate::new_mult_constant_gate((a.0, a.1), (b.0, b.1), (c.0, c.1), Some(constant), Some(pi));
-        self.gates.push(gate);
-        Ok(())   
-    }
 
     pub(crate) fn get_assignment(&self) -> (Vec<Fr>, Vec<Fr>, Vec<Fr>, Vec<Fr>, Vec<Fr>, Vec<Fr>, Vec<Fr>, Vec<Fr>, Vec<Fr>) {
-        
+
         let len = self.gates.len();
         let mut vec_a = vec![];
         let mut vec_b = vec![];
@@ -119,10 +71,10 @@ impl Circuit<> {
         let mut vec_qc = vec![];
         let mut vec_pi = vec![];
 
-        for gate in &self.gates {
-            vec_a.push(self.vals[0]);
-            vec_b.push(self.vals[gate.get_b_wire()]);
-            vec_c.push(self.vals[gate.get_c_wire()]);
+        for (index, gate) in self.gates.iter().enumerate() {
+            vec_a.push(self.vals[0][index]);
+            vec_b.push(self.vals[1][index]);
+            vec_c.push(self.vals[2][index]);
             vec_ql.push(gate.q_l);
             vec_qr.push(gate.q_r);
             vec_qm.push(gate.q_m);
@@ -130,7 +82,7 @@ impl Circuit<> {
             vec_qc.push(gate.q_c);
             vec_pi.push(gate.pi);
         }
-        
+
         (vec_a, vec_b, vec_c, vec_ql, vec_qr, vec_qm, vec_qo, vec_qc, vec_pi)
     }
 
@@ -161,13 +113,55 @@ impl Circuit<> {
 
     }
 
-    fn make_permutation(&self) -> CopyConstrains {
+    fn make_permutation(&self) -> CopyConstraints {
         let len = self.gates.len();
         let domain = <GeneralEvaluationDomain<Fr>>::new(len).unwrap();
         let roots = domain.elements().collect::<Vec<_>>();
         let (coset1, coset2) = self.find_corset(len);
 
+        /// create sigma_1, sigma_2, and sigma_3
+        let mut sigma_1 = vec![];
+        let mut sigma_2 = vec![];
+        let mut sigma_3 = vec![];
 
+        for gate in self.gates {
+            let (i_1, i_2) = gate.get_a_wire();
+            if (i_1 == 0) {
+                sigma_1.push(roots[i_2].clone());
+            } else if (i_1 == 1) {
+                sigma_1.push(coset1[i_2].clone());
+            } else {
+                sigma_1.push(coset2[i_2].clone());
+            }
+
+            let (i_1, i_2) = gate.get_b_wire();
+            if (i_1 == 0) {
+                sigma_2.push(roots[i_2].clone());
+            } else if (i_1 == 1) {
+                sigma_2.push(coset1[i_2].clone());
+            } else {
+                sigma_2.push(coset2[i_2].clone());
+            }
+
+            let (i_1, i_2) = gate.get_c_wire();
+            if (i_1 == 0) {
+                sigma_3.push(roots[i_2].clone());
+            } else if (i_1 == 1) {
+                sigma_3.push(coset1[i_2].clone());
+            } else {
+                sigma_3.push(coset2[i_2].clone());
+            }
+        }
+
+        let s_sigma_1 = Evaluations::from_vec_and_domain(sigma_1, domain).interpolate();
+        let s_sigma_2 = Evaluations::from_vec_and_domain(sigma_2, domain).interpolate();
+        let s_sigma_3 = Evaluations::from_vec_and_domain(sigma_3, domain).interpolate();
+
+        CopyConstraints::new(
+            s_sigma_1,
+            s_sigma_2,
+            s_sigma_3
+        )
     }
 
     pub(crate) fn compile_circuit(&self) -> CompiledCircuit {
@@ -176,9 +170,7 @@ impl Circuit<> {
         let srs = Srs::random(domain.size());
         let (vec_a, vec_b, vec_c, vec_ql, vec_qr, vec_qm, vec_qo, vec_qc, vec_pi) = self.get_assignment();
 
-
-
-        let gate_constrains = GateConstrains::new(
+        let gate_constraints = GateConstraints::new(
             Evaluations::from_vec_and_domain(vec_a, domain).interpolate(),
             Evaluations::from_vec_and_domain(vec_b, domain).interpolate(),
             Evaluations::from_vec_and_domain(vec_c, domain).interpolate(),
@@ -190,8 +182,49 @@ impl Circuit<> {
             Evaluations::from_vec_and_domain(vec_pi, domain).interpolate()
         );
 
-        
-        
+        let copy_constraints = self.make_permutation();
+
+        CompiledCircuit::new(gate_constraints, copy_constraints, srs, domain, len)
+
+
     }
+
+
+
 }
 
+#[cfg(test)]
+
+#[test]
+fn create_circuit_test() {
+    let mut circuit = Circuit::new();
+    circuit.add_a_mult_gate((0,0,Fr::from(1)), (0,0,Fr::from(1)), (2,0,Fr::from(1)), Fr::from(0));
+    circuit.add_a_mult_gate((0,0,Fr::from(1)), (1,1,Fr::from(2)), (2,1,Fr::from(2)), Fr::from(0));
+    circuit.add_an_add_gate((2,1,Fr::from(2)), (1,2,Fr::from(-3)), (2,2,Fr::from(-1)), Fr::from(0));
+    circuit.add_an_add_gate((2,0,Fr::from(1)), (2,2,Fr::from(-1)), (2,3,Fr::from(0)), Fr::from(0));
+    println!("Len: {}", circuit.gates.len());
+    for i in 0..3 {
+        println!("value in vec {} are:  {:?}", i, circuit.vals[i]);
+    }
+
+    println!("{:?} = {:?}", circuit.vals[0][2], circuit.vals[2][1]);
+
+    assert_eq!(circuit.vals[0][2], circuit.vals[2][1]);
+}
+
+#[test]
+fn circuit_test() {
+    let mut circuit = Circuit::new();
+    circuit.add_a_mult_gate((0,0,Fr::from(1)), (0,0,Fr::from(1)), (2,0,Fr::from(1)), Fr::from(0));
+    circuit.add_a_mult_gate((0,0,Fr::from(1)), (1,1,Fr::from(2)), (2,1,Fr::from(2)), Fr::from(0));
+    circuit.add_an_add_gate((2,1,Fr::from(2)), (1,2,Fr::from(-3)), (2,2,Fr::from(-1)), Fr::from(0));
+    circuit.add_an_add_gate((2,0,Fr::from(1)), (2,2,Fr::from(-1)), (2,3,Fr::from(0)), Fr::from(0));
+    println!("Len: {}", circuit.gates.len());
+    for i in 0..3 {
+        println!("value in vec {} are:  {:?}", i, circuit.vals[i]);
+    }
+
+    println!("{:?} = {:?}", circuit.vals[0][2], circuit.vals[2][1]);
+
+    assert_eq!(circuit.vals[0][0], circuit.vals[1][0]);
+}
