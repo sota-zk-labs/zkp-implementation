@@ -73,49 +73,7 @@ impl Gate {
     }
 
 
-    pub(crate) fn new_add_constant_gate(
-        a_id: (usize, usize), 
-        b_id: (usize, usize), 
-        c_id: (usize, usize),  
-        constant: Option<Fr>,
-        pi: Option<Fr>
-    ) -> Self {
-        let new_pi = Self::unwrap_option_value(pi);
-        let new_constant = Self::unwrap_option_value(constant);
-        Self {
-            a_wire: a_id,
-            b_wire: b_id, 
-            c_wire: c_id,
-            q_l: -Fr::one(),
-            q_r: Fr::one(), 
-            q_m: Fr::zero(),
-            q_o: -Fr::one(),
-            q_c: new_constant,
-            pi: new_pi
-        }
-    }
-    
-    pub(crate) fn new_mult_constant_gate(
-        a_id: (usize, usize), 
-        b_id: (usize, usize), 
-        c_id: (usize, usize),  
-        constant: Option<Fr>,
-        pi: Option<Fr>
-    ) -> Self {
-        let new_pi = Self::unwrap_option_value(pi);
-        let new_constant = Self::unwrap_option_value(constant);
-        Self {
-            a_wire: a_id,
-            b_wire: b_id, 
-            c_wire: c_id,
-            q_l: Fr::zero(),
-            q_r: Fr::zero(), 
-            q_m: Fr::one(),
-            q_o: -Fr::one(),
-            q_c: new_constant,
-            pi: new_pi
-        }
-    }
+
 
     pub(crate) fn get_a_wire(&self) -> (usize, usize) {
         self.a_wire
