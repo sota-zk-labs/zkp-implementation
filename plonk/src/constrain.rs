@@ -28,8 +28,25 @@ impl GateConstraints {
             q_cx,
             pi_x
         }
-
     }
+
+    pub fn get_f_ax(&self) -> &Polynomial {
+        &self.f_ax
+    }
+
+    pub fn get_f_bx(&self) -> &Polynomial {
+        &self.f_bx
+    }
+
+    pub fn get_f_cx(&self) -> &Polynomial {
+        &self.f_cx
+    }
+
+
+
+
+
+
 }
 
 pub struct CopyConstraints {
