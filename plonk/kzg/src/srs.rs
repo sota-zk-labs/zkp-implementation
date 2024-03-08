@@ -5,7 +5,7 @@ use crate::{G1Point, G2Point};
 use ark_ff::{Zero, One};
 use rand::Rng;
 use ark_ff::UniformRand;
-
+#[derive(Debug)]
 pub struct Srs {
     g1: Vec<G1Point>,
     g2: G2Point,

@@ -41,7 +41,7 @@ impl Gate {
             a_wire: a_id,
             b_wire: b_id, 
             c_wire: c_id,
-            q_l: -Fr::one(),
+            q_l: Fr::one(),
             q_r: Fr::one(), 
             q_m: Fr::zero(),
             q_o: -Fr::one(),

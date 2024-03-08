@@ -11,13 +11,15 @@ pub type Polynomial = DensePolynomial<Fr>;
 
 
 mod circuit;
-mod errors;
 mod gate;
 mod variable;
 mod constrain;
 mod prover;
 mod challenge;
+mod slice_polynomial;
+mod errors;
 
+#[derive(Debug)]
 pub struct CompiledCircuit {
     gate_constraint: GateConstraints,
     copy_constraint: CopyConstraints,
