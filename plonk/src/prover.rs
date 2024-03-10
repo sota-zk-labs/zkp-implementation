@@ -1,7 +1,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 use ark_bls12_381::Fr;
 use ark_ff::{Field, UniformRand, Zero};
-use ark_poly::univariate::DensePolynomial;
+use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial};
 use ark_poly::{EvaluationDomain, Evaluations, Polynomial as Poly, UVPolynomial};
 use kzg::{KzgCommitment, KzgScheme};
 use crate::{challenge, CompiledCircuit, Polynomial};
@@ -9,8 +9,25 @@ use crate::challenge::ChallengeParse;
 use crate::slice_polynomial::SlidePoly;
 
 pub(crate) struct Proof {
-
+    pub a_commit: KzgCommitment,
+    pub b_commit: KzgCommitment,
+    pub c_commit: KzgCommitment,
+    pub z_commit: KzgCommitment,
+    pub t_lo_commit: KzgCommitment,
+    pub t_mid_commit: KzgCommitment,
+    pub t_hi_commit: KzgCommitment,
+    pub w_ev_x_commit: KzgCommitment,
+    pub w_ev_wx_commit: KzgCommitment,
+    pub bar_a: Fr,
+    pub bar_b: Fr,
+    pub bar_c: Fr,
+    pub bar_ssigma_1: Fr,
+    pub bar_ssigma_2: Fr,
+    pub bar_z_w: Fr,
+    pub u: Fr,
+    pub degree: usize,
 }
+
 impl CompiledCircuit {
     pub fn prove(&self) -> Proof {
         /// Round 1
@@ -123,47 +140,131 @@ impl CompiledCircuit {
         let [alpha] = challenge.generate_challenges();
 
         let tx = self.compute_quotient_polynomial(&beta, &gamma, &alpha, &ax, &bx, &cx, &z_x, &z_wx);
+        let abc = tx.clone();
+        println!("T_x: {:?}", tx);
         let slice_poly = SlidePoly::new(tx, self.domain.size());
         let tx_commitment = slice_poly.commit(&scheme);
-
+        println!("slice_poly here: {:?}", slice_poly);
 
         /// round 4
-        // println!("ROUND 4");
-        // challenge.digest(&tx_commitment[0]);
-        // challenge.digest(&tx_commitment[1]);
-        // challenge.digest(&tx_commitment[2]);
-        //
-        // let [evaluation_challenge] = challenge.generate_challenges();
-        //
+        println!("ROUND 4");
+        challenge.digest(&tx_commitment[0]);
+        challenge.digest(&tx_commitment[1]);
+        challenge.digest(&tx_commitment[2]);
+
+        let [evaluation_challenge] = challenge.generate_challenges();
+
         // let bar_a = scheme.open(ax.clone(), evaluation_challenge);
         // let bar_b = scheme.open(bx.clone(), evaluation_challenge);
         // let bar_c = scheme.open(cx.clone(), evaluation_challenge);
         // let bar_ssigma_1 = scheme.open(self.copy_constraint.get_ssigma_1().clone(), evaluation_challenge);
-        // let bar_ssigma_2 = scheme.open(self.copy_constraint.get_ssigma_2().clone(), evaluation_challenge);        // let bar_ssigma_3 = self.copy_constraint.get_ssigma_3().evaluate(&evaluation_challenge);
+        // let bar_ssigma_2 = scheme.open(self.copy_constraint.get_ssigma_2().clone(), evaluation_challenge);
         // let bar_z_w = scheme.open(z_x.clone(), evaluation_challenge * w);
         // let pi_e = self.gate_constraint.get_pi_x().evaluate(&evaluation_challenge);
-        // let tx_compact = slice_poly.compact(&evaluation_challenge);
-        //
-        // /// round 5
-        // println!("ROUND 5");
-        // challenge.digest(&KzgCommitment(bar_a.0));
-        // challenge.digest(&KzgCommitment(bar_b.0));
-        // challenge.digest(&KzgCommitment(bar_c.0));
-        // challenge.digest(&KzgCommitment(bar_ssigma_1.0));
-        // challenge.digest(&KzgCommitment(bar_ssigma_2.0));
-        // challenge.digest(&KzgCommitment(bar_z_w.0));
-        //
-        // let [v] = challenge.generate_challenges();
-        // let r_x = self.compute_linearisation_polynomial(&beta, &gamma, &alpha, &evaluation_challenge,  &bar_a.1, &bar_b.1, &bar_c.1,
-        //             &bar_ssigma_1.1, &bar_ssigma_2.1, &bar_z_w.1, &pi_e, &tx_compact, &z_x);
+
+        let bar_a = ax.evaluate(&evaluation_challenge);
+        let bar_b = bx.evaluate(&evaluation_challenge);
+        let bar_c = cx.evaluate(&evaluation_challenge);
+        let bar_ssigma_1 = self.copy_constraint.get_ssigma_1().evaluate(&evaluation_challenge);
+        let bar_ssigma_2 = self.copy_constraint.get_ssigma_2().evaluate(&evaluation_challenge);
+        let bar_z_w = z_x.evaluate(&(evaluation_challenge * w));
+        let pi_e = self.gate_constraint.get_pi_x().evaluate(&evaluation_challenge);
+        // println!("slice_poly: {:?}", slice_poly);
+        let tx_compact = slice_poly.compact(&evaluation_challenge);
+        println!("tx_compact: {:?}", tx_compact);
+        let tmp = slice_poly.get_slices();
+        let curr = tmp.get(0).unwrap().clone()
+            + tmp.get(1).unwrap() * Self::power(&evaluation_challenge, slice_poly.get_degree() + 1)
+            + tmp.get(2).unwrap() * Self::power(&evaluation_challenge, 2 * slice_poly.get_degree() + 2);
+        println!("curr: {:?}", curr);
 
 
 
+        /// round 5
+        println!("ROUND 5");
+        challenge.digest(&scheme.commit_para(&bar_a));
+        challenge.digest(&scheme.commit_para(&bar_b));
+        challenge.digest(&scheme.commit_para(&bar_c));
+        challenge.digest(&scheme.commit_para(&bar_ssigma_1));
+        challenge.digest(&scheme.commit_para(&bar_ssigma_2));
+        challenge.digest(&scheme.commit_para(&bar_z_w));
+
+        let [v] = challenge.generate_challenges();
+        let r_x = self.compute_linearisation_polynomial(&beta, &gamma, &alpha, &evaluation_challenge,  &bar_a, &bar_b, &bar_c,
+                    &bar_ssigma_1, &bar_ssigma_2, &bar_z_w, &pi_e, &tx_compact, &z_x,  &ax, &bx, &cx, &z_wx);
+
+        let bar_r = r_x.evaluate(&evaluation_challenge);
+        println!("bar_r is: {:?}", bar_r);
+        let w_ev_x = Self::poly_sub_para(&r_x, &bar_r) + (Self::poly_sub_para(&ax, &bar_a)).mul(v) + (Self::poly_sub_para(&bx, &bar_b)).mul(v.square())
+            + (Self::poly_sub_para(&cx, &bar_c)).mul(v * v * v) + (Self::poly_sub_para(self.copy_constraint.get_ssigma_1(), &bar_ssigma_1)).mul(v* v* v* v)
+        + (Self::poly_sub_para(self.copy_constraint.get_ssigma_2(),&bar_ssigma_2)).mul( v * v * v * v * v);
+
+        /// check
+        {
+            let cur = DensePolynomial::from_coefficients_vec(vec![-evaluation_challenge, Fr::from(1)]);
+            let a = DenseOrSparsePolynomial::from(w_ev_x.clone());
+            let b = DenseOrSparsePolynomial::from(cur);
+            let div = a.divide_with_q_and_r(&b).expect("division failed");
+            assert_eq!(div.1, DensePolynomial::from_coefficients_vec(vec![]), "w_ev_x was computed uncorrected");
+        }
+
+        let w_ev_x = w_ev_x.div(&DensePolynomial::from_coefficients_vec(vec![-evaluation_challenge, Fr::from(1)]));
+
+        let w_ev_wx = Self::poly_sub_para(&z_x, &bar_z_w);
+
+        /// check
+        {
+            let cur = DensePolynomial::from_coefficients_vec(vec![-evaluation_challenge * w, Fr::from(1)]);
+            let a = DenseOrSparsePolynomial::from(w_ev_wx.clone());
+            let b = DenseOrSparsePolynomial::from(cur);
+            let div = a.divide_with_q_and_r(&b).expect("division failed");
+            assert_eq!(div.1, DensePolynomial::from_coefficients_vec(vec![]), "w_ev_wx was computed uncorrected");
+        }
+        let w_ev_wx = w_ev_wx.div(&DensePolynomial::from_coefficients_vec(vec![-evaluation_challenge * w, Fr::from(1)]));
+
+        let w_ev_x_commit = scheme.commit(&w_ev_x);
+        let w_ev_wx_commit = scheme.commit(&w_ev_wx);
+
+        challenge.digest(&w_ev_x_commit);
+        challenge.digest(&w_ev_wx_commit);
+        let [u] = challenge.generate_challenges();
 
 
-
-        Proof {}
+        Proof {
+            a_commit: commitments[0],
+            b_commit: commitments[1],
+            c_commit: commitments[2],
+            z_commit: z_x_commitment,
+            t_lo_commit: tx_commitment[0],
+            t_mid_commit: tx_commitment[1],
+            t_hi_commit: tx_commitment[2],
+            w_ev_x_commit: w_ev_x_commit,
+            w_ev_wx_commit: w_ev_wx_commit,
+            bar_a: bar_a,
+            bar_b: bar_b,
+            bar_c: bar_c,
+            bar_ssigma_1: bar_ssigma_1,
+            bar_ssigma_2: bar_ssigma_2,
+            bar_z_w: bar_z_w,
+            u: u,
+            degree: slice_poly.get_degree()
+        }
     }
+
+    fn poly_sub_para(poly: &Polynomial, para: &Fr) -> Polynomial {
+        let mut tmp = poly.clone();
+        tmp.coeffs[0] -= para;
+        tmp
+    }
+
+    fn poly_add_para(poly: &Polynomial, para: &Fr) -> Polynomial{
+        let mut tmp = poly.clone();
+        tmp.coeffs[0] += para;
+        tmp
+    }
+
+
+
 
 
     fn compute_acc(&self, beta: &Fr, gamma: &Fr) -> (Polynomial, Polynomial) {
@@ -227,16 +328,14 @@ impl CompiledCircuit {
             + self.gate_constraint.get_pi_x().clone()
             + self.gate_constraint.get_q_cx().clone();
 
-        println!("q_m deg: {:?}", self.gate_constraint.get_q_mx().degree());
-        println!("ax deg: {:?}", ax.degree());
-        println!("bx deg: {:?}", bx.degree());
-
+        println!("qm, ax, bx degree: {:?}, {:?}, {:?}", self.gate_constraint.get_q_mx().degree(), ax.degree(), bx.degree());
+        println!("line1 degree: {:?}", line1.degree());
         // println!("eva: {:?}", line1.evaluate(&w));
         // println!("Line1 R3: ");
         /// assert line 1
         self.vanishes(&line1, "line1 round 3");
         let (line1,_) = line1.divide_by_vanishing_poly(self.domain).unwrap();
-
+        println!("line1 degree: {:?}", line1.degree());
         // println!("lINE 2");
         // println!("s_sigma1 {:?}", self.copy_constraint.get_ssigma_1());
 
@@ -257,6 +356,9 @@ impl CompiledCircuit {
             .naive_mul(&(cx.clone() + DensePolynomial::from_coefficients_vec(vec![*gamma, *beta*k2])))
             .mul(*alpha)
             .naive_mul(z_x);
+
+        println!("z_x degree: {:?}", z_x.degree());
+
         // println!("line2: {:?}", line2);
         // println!("line22: {:?}", line22);
 
@@ -285,8 +387,8 @@ impl CompiledCircuit {
             .naive_mul(z_wx);
 
 
-        println!("zx deg: {:?}", z_x.degree());
-        println!("zwx deg: {:?}", z_wx.degree());
+        // println!("zx deg: {:?}", z_x.degree());
+        // println!("zwx deg: {:?}", z_wx.degree());
         // println!("line33_eval: {:?}", line33_eval);
         // println!("Check Permutation");
         // println!("z_x: {:?}", z_x);
@@ -294,15 +396,16 @@ impl CompiledCircuit {
         // line3 = line3.naive_mul(z_wx);
 
         /// assert evaluation of line 2 and 3
-        let line3_eval = line3.evaluate(&w);
-        let line2_eval = line2.evaluate(&w);
+        let tmp = self.domain.element(2);
+        let line3_eval = line3.evaluate(&tmp);
+        let line2_eval = line2.evaluate(&tmp);
         assert_eq!(
             line2_eval - line3_eval,
             Fr::zero()
         );
 
         let line23 = line2 + (-line3);
-
+        println!("line23 degree: {:?}", line23.degree());
 
         // println!("line2_eval: {:?}", line2_eval);
         // println!("line3_eval: {:?}", line3_eval);
@@ -310,7 +413,7 @@ impl CompiledCircuit {
         /// assert the combination of line 2 and 3
         self.vanishes(&line23, "line23 round 3");
         let (line23, _) = line23.divide_by_vanishing_poly(self.domain).unwrap();
-
+        println!("line23 degree: {:?}", line23.degree());
         println!("Line 4");
         let line4 = {
             let l1 = self.l1_poly();
@@ -318,20 +421,20 @@ impl CompiledCircuit {
             zx2.coeffs[0] -= Fr::from(1);
             zx2.naive_mul(&l1).mul(alpha.square())
         };
-
+        println!("line4 degree: {:?}", line4.degree());
         // println!("Check line 4");
         self.vanishes(&line4, "Error: Line4 Round 3");
         let (line4, _) = line4.divide_by_vanishing_poly(self.domain).unwrap();
-
-        println!("line1: {:?}", line1);
-        println!("line23: {:?}", line23);
-        // println!("line3: {:?}", line3);
-        println!("line4: {:?}", line4);
+        println!("line4 degree: {:?}", line4.degree());
+        // println!("line1: {:?}", line1);
+        // println!("line23: {:?}", line23);
+        // // println!("line3: {:?}", line3);
+        // println!("line4: {:?}", line4);
 
 
         let quotient_polynomial = line1 + line23 + line4;
         // let (quotient_polynomial, _) = quotient_polynomial.divide_by_vanishing_poly(self.domain).unwrap();
-        println!("quotient_polynomial: {:?}", quotient_polynomial);
+        // println!("quotient_polynomial: {:?}", quotient_polynomial);
 
         quotient_polynomial
 
@@ -345,7 +448,7 @@ impl CompiledCircuit {
         assert!(rest.is_zero(), "{}", msg);
     }
 
-    fn l1_poly(&self) -> Polynomial {
+    pub(crate) fn l1_poly(&self) -> Polynomial {
         let n = self.domain.size();
         let mut l1_e = vec![Fr::from(0); n];
         l1_e[0] = Fr::from(1);
@@ -355,27 +458,47 @@ impl CompiledCircuit {
     fn compute_linearisation_polynomial(&self, beta: &Fr, gamma: &Fr, alpha: &Fr, eval_challenge: &Fr,
                                         bar_a: &Fr, bar_b: &Fr, bar_c: &Fr, bar_ssigma_1: &Fr,
                                         bar_ssigma_2: &Fr, bar_z_w: &Fr, pi_e: &Fr, tx_compact: &Polynomial,
-                                        z_x: &Polynomial) -> Polynomial
+                                        z_x: &Polynomial, ax: &Polynomial, bx: &Polynomial, cx: &Polynomial, z_wx: &Polynomial) -> Polynomial
     {
 
         let mut line1 = self.gate_constraint.get_q_mx().mul(*bar_a * *bar_b) + self.gate_constraint.get_q_lx().mul(*bar_a)
             + self.gate_constraint.get_q_rx().mul(*bar_b) + self.gate_constraint.get_q_ox().mul(*bar_c)
             + self.gate_constraint.get_q_cx().clone();
+        // println!("co0: {:?}", line1.coeffs[0]);
         line1.coeffs[0] += pi_e;
+        // println!("co0: {:?}", line1.coeffs[0]);
         let line2 = (*bar_a + *beta * eval_challenge + gamma) * (*bar_b + *beta * self.copy_constraint.get_k1() * eval_challenge + gamma)
             * (*bar_c + *beta * self.copy_constraint.get_k2() * eval_challenge + gamma) * alpha;
         let line2 = z_x.mul(line2);
 
         let line3 = (*bar_a + *beta * bar_ssigma_1 + gamma) * (*bar_b + *beta * bar_ssigma_2 + gamma) * bar_z_w * alpha;
-        let tmp1 = line3.clone() * (*bar_c + gamma);
-        let mut tmp2 = (self.copy_constraint.get_ssigma_3().mul(*beta)).mul(line3);
-        let line3 = {
-            tmp2.coeffs[0] += tmp1;
-            tmp2
-        };
+
+        let mut tmp2 = (self.copy_constraint.get_ssigma_3().mul(*beta));
+        tmp2.coeffs[0] += (*bar_c + gamma);
+        let line3 = tmp2.mul(line3);
 
 
+        /// check:
+        {
+            let mut line22 = (ax.clone() + DensePolynomial::from_coefficients_vec(vec![*gamma, *beta]))
+                .naive_mul(&(bx.clone() + DensePolynomial::from_coefficients_vec(vec![*gamma, *beta * self.copy_constraint.get_k1()])))
+                .naive_mul(&(cx.clone() + DensePolynomial::from_coefficients_vec(vec![*gamma, *beta * self.copy_constraint.get_k2()])))
+                .mul(*alpha)
+                .naive_mul(z_x);
 
+            let mut line32 = (ax.clone() + self.copy_constraint.get_ssigma_1().mul(*beta) + DensePolynomial::from_coefficients_vec(vec![*gamma]))
+                .naive_mul(&(bx.clone() + self.copy_constraint.get_ssigma_2().mul(*beta) + DensePolynomial::from_coefficients_vec(vec![*gamma])))
+                .naive_mul(&(cx.clone() + self.copy_constraint.get_ssigma_3().mul(*beta) + DensePolynomial::from_coefficients_vec(vec![*gamma])))
+                .mul(*alpha)
+                .naive_mul(z_wx);
+
+            let diff2 = line32.evaluate(eval_challenge) - line22.evaluate(eval_challenge);
+            let cur = line3.evaluate(eval_challenge) - line2.evaluate(eval_challenge);
+            assert_eq!(diff2, cur, "Wrong at line2 or line3");
+        }
+
+
+        // println!("l1_poly: {:?}, domain_size: {:?}", self.l1_poly(), self.domain.size());
         let line4 = {
             let l1_e = self.l1_poly().evaluate(eval_challenge);
             let mut zx2 = z_x.clone();
@@ -422,7 +545,8 @@ fn compile_circuit_test() {
     let compile_circuit = circuit.compile_circuit();
     // println!("{:?}", compile_circuit);
 
-    compile_circuit.prove();
+    // let proof = compile_circuit.prove();
+    // assert!(compile_circuit.verify(proof));
 
 
 

@@ -18,6 +18,7 @@ mod prover;
 mod challenge;
 mod slice_polynomial;
 mod errors;
+mod verifier;
 
 #[derive(Debug)]
 pub struct CompiledCircuit {

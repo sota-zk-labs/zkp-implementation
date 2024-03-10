@@ -38,6 +38,12 @@ impl<'a> KzgScheme<'a> {
         let commitment = self.evaluate_in_s(polynomial);
         KzgCommitment(commitment)
     }
+
+    pub fn commit_para(&self, para: &Fr) -> KzgCommitment {
+        let g1_0 = self.0.get_g1_ref().get(0).unwrap();
+        let commitment = g1_0.mul(para.clone()).into();
+        KzgCommitment(commitment)
+    }
     fn evaluate_in_s(&self, polynomial: &MyPoly) -> G1Point {
         let srs = self.0.get_g1_ref();
         assert!(srs.len() > polynomial.degree());
@@ -60,6 +66,7 @@ impl<'a> KzgScheme<'a> {
         let root = MyPoly::from_coefficients_slice(&[-(z), 1.into()]);
         let new_poly = &polynomial / &root;
         let opening = self.evaluate_in_s(&new_poly);
+
         KzgOpening(opening, evaluation_at_z)
     }
     ///verifies the opening P(z) = y

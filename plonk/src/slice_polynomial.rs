@@ -6,7 +6,7 @@ use ark_poly::univariate::SparsePolynomial;
 use kzg::{KzgCommitment, KzgScheme};
 use crate::Polynomial;
 
-#[derive()]
+#[derive(Debug)]
 pub(crate) struct SlidePoly {
     slices: [Polynomial; 3],
     degree: usize
@@ -18,7 +18,7 @@ impl SlidePoly {
         let coeffs = polynomial.coeffs;
 
         let mut tmp = coeffs.len() / 3;
-        if (tmp * 3 <= coeffs.len()) {
+        if (tmp * 3 < coeffs.len()) {
             tmp += 1;
         }
 
@@ -34,6 +34,13 @@ impl SlidePoly {
         Self {slices, degree: (tmp - 1)}
     }
 
+    pub fn get_degree(&self) -> usize {
+        self.degree.clone()
+    }
+
+    pub fn get_slices(&self) -> &[Polynomial; 3] {
+        &self.slices
+    }
     pub fn commit(&self, scheme: &KzgScheme) -> [KzgCommitment; 3] {
         self.slices.clone().map(|slice| scheme.commit(&slice))
     }
@@ -41,9 +48,10 @@ impl SlidePoly {
     pub fn compact(&self, point: &Fr) -> Polynomial {
         self.slices.iter().enumerate().map(|(index, slice)| {
             let exponent = SparsePolynomial::from_coefficients_slice(&[(
-                (self.degree) * index,
+                (self.degree + 1) * index,
                 Fr::one(),
             )]);
+            println!("exponet: {:?}", exponent);
             slice.mul(exponent.evaluate(&point))
         }).reduce(|one, other| one + other).unwrap()
     }
