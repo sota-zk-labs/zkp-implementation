@@ -1,7 +1,8 @@
-use ark_ec::PairingEngine;
-use ark_poly::{univariate::DensePolynomial, GeneralEvaluationDomain};
 use ark_bls12_381::Fr;
-use kzg::{srs::Srs};
+use ark_ec::PairingEngine;
+use ark_poly::{GeneralEvaluationDomain, univariate::DensePolynomial};
+
+use kzg::srs::Srs;
 
 use crate::constrain::{CopyConstraints, GateConstraints};
 
@@ -12,7 +13,6 @@ pub type Polynomial = DensePolynomial<Fr>;
 
 mod circuit;
 mod gate;
-mod variable;
 mod constrain;
 mod prover;
 mod challenge;

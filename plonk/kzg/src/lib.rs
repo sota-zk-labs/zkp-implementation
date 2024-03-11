@@ -69,7 +69,7 @@ impl<'a> KzgScheme<'a> {
 
         KzgOpening(opening, evaluation_at_z)
     }
-    ///verifies the opening P(z) = y
+
     pub fn verify(
         &self,
         commitment: &KzgCommitment,
@@ -77,7 +77,6 @@ impl<'a> KzgScheme<'a> {
         z: impl Into<Fr> + Debug + Display,
     ) -> bool {
         let y = opening.1;
-        //let g1 = self.0.g1_ref();
         let g2s = self.0.get_g2s_ref();
         let g2 = self.0.get_g2_ref();
         let a = g2s.clone().into_projective() - (g2.mul(z.into()));
