@@ -18,7 +18,7 @@ impl Srs {
         let (g2, g2s) = Self::g2(secret);
         Self {g1, g2, g2s}
     }
-    
+
     fn g1(secret: Fr, len: usize) -> Vec<G1Point> {
         let generator = G1Point::prime_subgroup_generator();
         let mut srs = vec![];
@@ -58,5 +58,5 @@ impl Srs {
 
 
 
-    
+
 }

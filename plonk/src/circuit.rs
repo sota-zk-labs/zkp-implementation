@@ -7,7 +7,7 @@ use crate::CompiledCircuit;
 use crate::constrain::{CopyConstraints, GateConstraints};
 use crate::errors::CustomError;
 use crate::gate::Gate;
-use crate::srs::Srs;
+use kzg::srs::Srs;
 
 struct Circuit {
     gates: Vec<Gate>,
@@ -124,7 +124,7 @@ impl Circuit<> {
         let mut sigma_2 = vec![];
         let mut sigma_3 = vec![];
 
-        for gate in self.gates {
+        for gate in &self.gates {
             let (i_1, i_2) = gate.get_a_wire();
             if (i_1 == 0) {
                 sigma_1.push(roots[i_2].clone());
@@ -185,7 +185,6 @@ impl Circuit<> {
         let copy_constraints = self.make_permutation();
 
         CompiledCircuit::new(gate_constraints, copy_constraints, srs, domain, len)
-
 
     }
 
