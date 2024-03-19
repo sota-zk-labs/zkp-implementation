@@ -1,7 +1,3 @@
-[workspace]
-members = ["kzg"]
-
-
 [package]
 name = "plonk"
 version = "0.1.0"
@@ -15,6 +11,6 @@ ark-poly = "0.3"
 ark-ec = "0.3"
 ark-bls12-381 = "0.3"
 ark-serialize = "0.3"
-kzg = { path = "./kzg" }
+kzg = { path = "../kzg" }
 rand = "0.8.5"
 sha2 = "0.11.0-pre.3"

@@ -1,3 +1,5 @@
+pub mod srs;
+
 use crate::{srs::Srs, Poly as MyPoly};
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_ec::{AffineCurve, PairingEngine};
@@ -6,8 +8,6 @@ use std::{
     fmt::{Debug, Display},
     ops::{Add, Mul, Neg, Sub},
 };
-
-pub mod srs;
 
 pub type G1Point = <ark_bls12_381::Bls12_381 as PairingEngine>::G1Affine;
 pub type G2Point = <ark_bls12_381::Bls12_381 as PairingEngine>::G2Affine;
@@ -100,7 +100,7 @@ pub fn print_poly(poly: &MyPoly) {
 
 #[test]
 fn commit() {
-    let srs = Srs::from_secret(Fr::from(2), 10);
+    let srs = Srs::new_from_secret(Fr::from(2), 10);
     let scheme = KzgScheme(&srs);
     let poly = MyPoly::from_coefficients_slice(&[1.into(), 2.into(), 3.into()]);
     let commitment = scheme.commit(&poly);

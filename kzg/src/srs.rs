@@ -1,9 +1,7 @@
 use ark_bls12_381::Fr;
 use ark_ec::AffineCurve;
-use ark_poly::domain::general;
 use crate::{G1Point, G2Point};
-use ark_ff::{Zero, One};
-use rand::Rng;
+use ark_ff::{One};
 use ark_ff::UniformRand;
 #[derive(Debug)]
 pub struct Srs {
@@ -24,7 +22,7 @@ impl Srs {
         let mut srs = vec![];
         srs.push(generator);
         let mut cur = Fr::one();
-        for i in 1..len {
+        for _ in 1..len {
             cur = cur * secret;
             let tmp = generator.mul(cur).into();
             srs.push(tmp);

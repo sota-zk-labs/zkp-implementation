@@ -19,7 +19,7 @@ mod challenge;
 mod slice_polynomial;
 mod errors;
 mod verifier;
-
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct CompiledCircuit {
     gate_constraint: GateConstraints,
