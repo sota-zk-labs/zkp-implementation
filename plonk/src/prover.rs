@@ -11,7 +11,7 @@ use crate::{CompiledCircuit, Polynomial};
 use crate::challenge::ChallengeParse;
 use crate::slice_polynomial::SlidePoly;
 
-pub(crate) struct Proof {
+pub struct Proof {
     pub a_commit: KzgCommitment,
     pub b_commit: KzgCommitment,
     pub c_commit: KzgCommitment,
@@ -129,6 +129,7 @@ impl CompiledCircuit {
         let tx_compact = slice_poly.compact(&evaluation_challenge);
 
         // round 5
+        #[cfg(test)]
         println!("ROUND 5");
         challenge.digest(&scheme.commit_para(&bar_a));
         challenge.digest(&scheme.commit_para(&bar_b));

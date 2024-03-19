@@ -8,76 +8,71 @@ use kzg::srs::Srs;
 
 use crate::CompiledCircuit;
 use crate::constrain::{CopyConstraints, GateConstraints};
-use crate::errors::CustomError;
 use crate::gate::{Gate, Position};
 
 #[allow(dead_code)]
-pub(crate) struct Circuit {
+pub struct Circuit {
     gates: Vec<Gate>,
     vals: Vec<Arc<Vec<Fr>>>,
 }
 
 #[allow(dead_code)]
 impl Circuit<> {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             gates: Vec::new(),
             vals: vec![Arc::new(Vec::new()), Arc::new(Vec::new()), Arc::new(Vec::new())],
         }
     }
 
-    pub(crate) fn add_an_add_gate(
+    pub fn add_an_add_gate(
         &mut self,
         a: (usize, usize, Fr),
         b: (usize, usize, Fr),
         c: (usize, usize, Fr),
         pi: Fr,
-    ) -> Result<(), CustomError> {
+    ) {
         Arc::get_mut(&mut self.vals[0]).unwrap().push(a.2);
         Arc::get_mut(&mut self.vals[1]).unwrap().push(b.2);
         Arc::get_mut(&mut self.vals[2]).unwrap().push(c.2);
 
         let gate = Gate::new_add_gate(Position::Pos(a.0, a.1), Position::Pos(b.0, b.1), Position::Pos(c.0, c.1), Some(pi));
         self.gates.push(gate);
-        Ok(())
     }
 
-    pub(crate) fn add_a_mult_gate(
+    pub fn add_a_mult_gate(
         &mut self,
         a: (usize, usize, Fr),
         b: (usize, usize, Fr),
         c: (usize, usize, Fr),
         pi: Fr,
-    ) -> Result<(), CustomError> {
+    ){
         Arc::get_mut(&mut self.vals[0]).unwrap().push(a.2);
         Arc::get_mut(&mut self.vals[1]).unwrap().push(b.2);
         Arc::get_mut(&mut self.vals[2]).unwrap().push(c.2);
 
         let gate = Gate::new_mult_gate(Position::Pos(a.0, a.1), Position::Pos(b.0, b.1), Position::Pos(c.0, c.1), Some(pi));
         self.gates.push(gate);
-        Ok(())
     }
 
-    pub(crate) fn add_a_constant_gate(
+    pub fn add_a_constant_gate(
         &mut self,
         a: (usize, usize, Fr),
         b: (usize, usize, Fr),
         c: (usize, usize, Fr),
         pi: Fr,
-    ) -> Result<(), CustomError> {
+    ) {
         Arc::get_mut(&mut self.vals[0]).unwrap().push(a.2);
         Arc::get_mut(&mut self.vals[1]).unwrap().push(b.2);
         Arc::get_mut(&mut self.vals[2]).unwrap().push(c.2);
 
         let gate = Gate::new_constant_gate(Position::Pos(a.0, a.1), Position::Pos(b.0, b.1), Position::Pos(c.0, c.1), a.2, Some(pi));
         self.gates.push(gate);
-        Ok(())
     }
 
-    pub(crate) fn add_a_dummy_gate(&mut self) -> Result<(), CustomError> {
+    pub fn add_a_dummy_gate(&mut self) {
         let gate = Gate::new_dummy_gate();
         self.gates.push(gate);
-        Ok(())
     }
 
 
@@ -211,7 +206,7 @@ impl Circuit<> {
         }
     }
 
-    pub(crate) fn compile_circuit(&mut self) -> CompiledCircuit {
+    pub fn compile_circuit(&mut self) -> CompiledCircuit {
         self.fill_circuit();
         let len = self.gates.len();
         let domain = <GeneralEvaluationDomain<Fr>>::new(len).unwrap();

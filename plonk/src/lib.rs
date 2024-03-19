@@ -11,7 +11,7 @@ pub type G2Point = <ark_bls12_381::Bls12_381 as PairingEngine>::G2Affine;
 pub type Polynomial = DensePolynomial<Fr>;
 
 
-mod circuit;
+pub mod circuit;
 mod gate;
 mod constrain;
 mod prover;
