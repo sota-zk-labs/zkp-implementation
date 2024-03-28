@@ -53,7 +53,7 @@ impl<T: Digest + Default> ChallengeGenerator<T> {
         kzg_commitment
             .inner()
             .serialize_uncompressed(HashMarshaller(&mut hasher))
-            .expect("HashMarshaller::flush should be infallible!");
+            .expect("HashMarshaller::serialize_uncompressed should be infallible!");
         self.data = Some(hasher.finalize().to_vec());
         self.generated = false;
     }
