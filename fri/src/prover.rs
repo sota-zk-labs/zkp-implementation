@@ -35,7 +35,7 @@ pub fn commit_phase<F: PrimeField>(
     let mut transcript = Transcript::new();
     let mut current_layer = FriLayer::new(&cur_poly, &cur_coset, cur_domain_size);
     fri_layers.push(current_layer.clone());
-    transcript.append(&current_layer.merkle_tree.root);
+    transcript.append(current_layer.merkle_tree.root.clone());
 
     for i in 1..number_layers {
         let random_r = transcript.generate_a_challenge();
@@ -46,7 +46,7 @@ pub fn commit_phase<F: PrimeField>(
         cur_poly = fold_polynomial(&cur_poly, &random_r);
         current_layer = FriLayer::new(&cur_poly, &cur_coset, cur_domain_size);
         fri_layers.push(current_layer.clone());
-        transcript.append(&current_layer.merkle_tree.root);
+        transcript.append(current_layer.merkle_tree.root.clone());
     }
 
     // the constant commitment
@@ -54,7 +54,7 @@ pub fn commit_phase<F: PrimeField>(
     let last_poly = fold_polynomial(&cur_poly, &random_r);
     let const_value = last_poly.coeffs.get(0).unwrap_or(&F::ZERO).clone();
 
-    transcript.append(&const_value);
+    transcript.append(const_value.clone());
     (const_value, fri_layers)
 }
 
