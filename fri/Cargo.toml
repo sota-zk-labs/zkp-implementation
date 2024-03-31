@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 ark-poly = "0.4.2"
 ark-ff = "0.4.2"
+sha2 = "0.11.0-pre.3"
