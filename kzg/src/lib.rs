@@ -9,6 +9,7 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
+// This KZG code was inspired by TyPLONK: https://github.com/fabrizio-m/TyPLONK
 pub type G1Point = <ark_bls12_381::Bls12_381 as PairingEngine>::G1Affine;
 pub type G2Point = <ark_bls12_381::Bls12_381 as PairingEngine>::G2Affine;
 pub type Poly = DensePolynomial<Fr>;

@@ -1,5 +1,4 @@
 # ZKP Implementations
 
 ## PLONK implementation
-You can read the description of the PLONK implementation [here](./plonk/plonk)
-
+The description of the PLONK implementation is [here](./plonk/plonk.md).

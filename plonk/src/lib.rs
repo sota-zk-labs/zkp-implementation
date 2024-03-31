@@ -1,6 +1,6 @@
 use ark_bls12_381::Fr;
 use ark_ec::PairingEngine;
-use ark_poly::{GeneralEvaluationDomain, univariate::DensePolynomial};
+use ark_poly::{univariate::DensePolynomial};
 
 use kzg::srs::Srs;
 
@@ -14,32 +14,36 @@ pub type Polynomial = DensePolynomial<Fr>;
 pub mod circuit;
 mod gate;
 mod constrain;
-mod prover;
+pub mod prover;
 mod challenge;
 mod slice_polynomial;
-mod errors;
-mod verifier;
-#[allow(dead_code)]
+pub mod verifier;
 #[derive(Debug)]
 pub struct CompiledCircuit {
     gate_constraint: GateConstraints,
     copy_constraint: CopyConstraints,
     srs: Srs,
-    domain: GeneralEvaluationDomain<Fr>,
-    pub size: usize
+    pub size: usize,
 }
 
 impl CompiledCircuit {
     pub fn new (gate_constraint: GateConstraints,copy_constraint: CopyConstraints,
-    srs: Srs, domain: GeneralEvaluationDomain<Fr>, size: usize) -> Self{
+    srs: Srs, size: usize) -> Self{
         Self {
             gate_constraint,
             copy_constraint,
             srs,
-            domain,
             size
         }
     }
 
-
+    pub fn gate_constraint(&self) -> &GateConstraints {
+        &self.gate_constraint
+    }
+    pub fn copy_constraint(&self) -> &CopyConstraints {
+        &self.copy_constraint
+    }
+    pub fn srs(&self) -> &Srs {
+        &self.srs
+    }
 }

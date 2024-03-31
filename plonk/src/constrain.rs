@@ -32,25 +32,35 @@ impl GateConstraints {
         }
     }
 
-    pub fn get_f_ax(&self) -> &Polynomial {
+    pub fn f_ax(&self) -> &Polynomial {
         &self.f_ax
     }
 
-    pub fn get_f_bx(&self) -> &Polynomial {
+    pub fn f_bx(&self) -> &Polynomial {
         &self.f_bx
     }
 
-    pub fn get_f_cx(&self) -> &Polynomial {
+    pub fn f_cx(&self) -> &Polynomial {
         &self.f_cx
     }
-
-    pub fn get_q_lx(&self) -> &Polynomial { &self.q_lx }
-
-    pub fn get_q_rx(&self) -> &Polynomial { &self.q_rx }
-    pub fn get_q_ox(&self) -> &Polynomial { &self.q_ox }
-    pub fn get_q_mx(&self) -> &Polynomial { &self.q_mx }
-    pub fn get_q_cx(&self) -> &Polynomial { &self.q_cx }
-    pub fn get_pi_x(&self) -> &Polynomial { &self.pi_x }
+    pub fn q_lx(&self) -> &Polynomial {
+        &self.q_lx
+    }
+    pub fn q_rx(&self) -> &Polynomial {
+        &self.q_rx
+    }
+    pub fn q_ox(&self) -> &Polynomial {
+        &self.q_ox
+    }
+    pub fn q_mx(&self) -> &Polynomial {
+        &self.q_mx
+    }
+    pub fn q_cx(&self) -> &Polynomial {
+        &self.q_cx
+    }
+    pub fn pi_x(&self) -> &Polynomial {
+        &self.pi_x
+    }
 }
 
 #[derive(Debug)]
@@ -74,23 +84,23 @@ impl CopyConstraints {
     }
 
 
-    pub fn get_ssigma_1(&self) -> &Polynomial {
+    pub fn get_s_sigma_1(&self) -> &Polynomial {
         &self.s_sigma_1
     }
 
-    pub fn get_ssigma_2(&self) -> &Polynomial {
+    pub fn get_s_sigma_2(&self) -> &Polynomial {
         &self.s_sigma_2
     }
 
-    pub fn get_ssigma_3(&self) -> &Polynomial {
+    pub fn get_s_sigma_3(&self) -> &Polynomial {
         &self.s_sigma_3
     }
 
-    pub fn get_k1(&self) -> &Fr {
+    pub fn k1(&self) -> &Fr {
         &self.k1
     }
 
-    pub fn get_k2(&self) -> &Fr {
+    pub fn k2(&self) -> &Fr {
         &self.k2
     }
 }

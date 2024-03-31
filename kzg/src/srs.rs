@@ -11,6 +11,7 @@ pub struct Srs {
 }
 
 impl Srs {
+    // generate points
     pub fn new_from_secret(secret: Fr, gates: usize) -> Self{
         let g1 = Self::g1(secret, gates + 3);
         let (g2, g2s) = Self::g2(secret);
@@ -53,8 +54,4 @@ impl Srs {
     pub fn get_g2s_ref(&self) -> &G2Point {
         &self.g2s
     }
-
-
-
-
 }

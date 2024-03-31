@@ -5,7 +5,7 @@ use ark_ff::{One, Zero};
 #[derive(PartialEq)]
 pub enum Position{
     Dummy,
-    Pos(usize, usize)
+    Pos(usize, usize),
 }
 #[allow(dead_code)]
 pub struct Gate {
@@ -22,20 +22,6 @@ pub struct Gate {
 
 #[allow(dead_code)]
 impl Gate {
-
-    pub fn new() -> Gate {
-        Self {
-            a_wire: Position::Dummy,
-            b_wire: Position::Dummy,
-            c_wire: Position::Dummy,
-            q_l: Fr::from(0),
-            q_r: Fr::from(0),
-            q_o: Fr::from(0),
-            q_m: Fr::from(0),
-            q_c: Fr::from(0),
-            pi: Fr::from(0),
-        }
-    }
     fn unwrap_option_value(x: Option<Fr>) -> Fr {
         let negative_one = -Fr::one();
 
@@ -128,8 +114,9 @@ impl Gate {
             pi: Fr::zero(),
         }
     }
-
-
+    pub(crate) fn is_dummy_gate(&self) -> bool {
+        self.a_wire == Position::Dummy
+    }
     pub(crate) fn get_a_wire(&self) -> &Position {
         &self.a_wire
     }

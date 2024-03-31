@@ -11,7 +11,6 @@ pub struct ChallengeParse {
     data: Vec<u8>
 }
 
-
 impl ChallengeParse {
     pub fn new() -> Self {
         Self {
@@ -22,7 +21,6 @@ impl ChallengeParse {
     fn inner(&self) -> &Vec<u8> {
         &self.data
     }
-
 
     pub fn digest(&mut self, kzg_commitment: &KzgCommitment) {
         kzg_commitment
