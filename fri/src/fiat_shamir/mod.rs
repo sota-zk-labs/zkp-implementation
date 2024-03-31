@@ -17,14 +17,31 @@ impl <F:PrimeField> Transcript<F> {
     }
 
     pub fn generate_a_challenge(&self) -> F {
-        let challenge = F::ZERO;
+        let challenge = F::ONE;
         // Todo: implement generate function.
         challenge
     }
     // generate challenges with data.
     pub fn generate_challenge_list(&self, number: usize) -> Vec<F>{
-        let challenges = Vec::new();
+        let mut challenges = Vec::new();
+        for i in 0..number {
+            challenges.push(F::ONE);
+        }
         // Todo: implement generate function.
         challenges
+    }
+
+    pub fn generate_a_index(&self) -> usize {
+        // Todo: implement generate function
+        1
+    }
+
+    pub fn generate_index_list(&self, number: usize) -> Vec<usize> {
+        // Todo: implement generate function
+        let mut indexes = Vec::new();
+        for i in 0..number {
+            indexes.push(i + 1);
+        }
+        indexes
     }
 }
