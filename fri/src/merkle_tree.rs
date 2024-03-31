@@ -1,12 +1,13 @@
 use ark_ff::PrimeField;
 use crate::hasher::CustomizedHash;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MerkleProof<F: PrimeField> {
     pub index: usize,
     pub leaf_val: F,
     hash_proof: Vec<F>,
     merkle_root: F,
 }
+#[derive(Debug, Clone)]
 pub struct MerkleTree<F: PrimeField> {
     pub root: F,
     levels: Vec<Vec<F>>, // the hash of internal nodes
@@ -85,7 +86,7 @@ pub fn verify_merkle_proof<F: PrimeField, >(proof: &MerkleProof<F>) -> bool {
             cur_index /= 2;
         }
     }
-    return (cur_hash == proof.merkle_root);
+    return cur_hash == proof.merkle_root;
 }
 
 #[cfg(test)]
