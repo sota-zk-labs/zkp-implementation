@@ -1,3 +1,4 @@
+use std::ops::Index;
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial};
 use ark_poly::univariate::DensePolynomial;
@@ -5,12 +6,24 @@ use crate::fiat_shamir::Transcript;
 use crate::fri_layer::FriLayer;
 use crate::merkle_tree::MerkleProof;
 
+// this struct is used for query phase
 #[derive(Clone, Debug)]
 pub struct Decommitment<F: PrimeField> {
     pub evaluations: Vec<F>, // List of evaluation for each query index in all layers,
     pub auth_paths:Vec<MerkleProof<F>>, // and their authentication path in Merkle Tree
     pub sym_evaluations: Vec<F>, // List of evaluation for each symmetric query index in all layers,
     pub sym_auth_paths: Vec<MerkleProof<F>>, // and their authentication path in Merkle Tree
+}
+
+#[derive(Clone, Debug)]
+pub struct Proof<F: PrimeField> {
+    pub domain_size: usize,
+    pub coset: F,
+    pub number_of_queries: usize,
+    pub layers_root: Vec<F>,
+    pub const_val: F,
+    pub decommitment_list: Vec<Decommitment<F>>,
+    pub challenge_list: Vec<usize>
 }
 
 pub fn fold_polynomial<F: PrimeField>(
@@ -78,6 +91,7 @@ pub fn query_phase<F: PrimeField>(
         let mut decommitment_list = Vec::new();
 
         for challenge in challenge_list.clone() {
+            // generate decommitment for each challenge.
             let mut evaluations = vec![];
             let mut sym_evaluations = vec![];
             let mut auth_paths = vec![];
@@ -115,7 +129,33 @@ pub fn query_phase<F: PrimeField>(
     }
 }
 
+fn log2_of_usize(n: usize) -> usize {
+    if n == 0 {
+        return 0; // log2(0) is undefined, return 0 or handle error accordingly
+    }
+    let bits = 8 * std::mem::size_of::<usize>();
+    bits - n.leading_zeros() as usize - if n.is_power_of_two() { 1 } else { 0 }
+}
+pub fn generate_proof<F: PrimeField>(poly: &DensePolynomial<F>, blowup_factor: usize, number_of_queries: usize) -> Proof<F> {
+    let domain_size = (poly.coeffs.len() * blowup_factor).next_power_of_two();
+    let coset = F::GENERATOR;
+    let number_of_layers = log2_of_usize(domain_size);
 
+    let (const_val,transcript, fri_layers) = commit_phase(&poly, &coset, domain_size, number_of_layers);
+    let (decommitment_list, challenge_list) = query_phase(number_of_queries, domain_size, &transcript, &fri_layers);
+
+    let fri_layers_root: Vec<F> = fri_layers.iter().map(|layer| layer.merkle_tree.root).collect();
+
+    Proof {
+        domain_size,
+        coset,
+        number_of_queries,
+        layers_root: fri_layers_root,
+        const_val,
+        decommitment_list,
+        challenge_list
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -164,18 +204,12 @@ mod tests {
         let validate_challenge_list = transcript.generate_index_list(1).iter().map(|v| {
             *v % 4
         }).collect::<Vec<usize>>();
-        println!("{:?}", challenge_list);
-
         assert_eq!(validate_challenge_list, challenge_list);
-        println!("len: {:?}", decommitment_list.len());
         let decommitment = decommitment_list[0].clone();
-        println!("{:?}", decommitment);
         let auth_paths_layer2 = decommitment.auth_paths[0].index;
         let sym_auth_paths_layer2 = decommitment.sym_auth_paths[0].index;
         assert_eq!(auth_paths_layer2, 1);
         assert_eq!(auth_paths_layer2 + 2, sym_auth_paths_layer2);
 
     }
-
-
 }
