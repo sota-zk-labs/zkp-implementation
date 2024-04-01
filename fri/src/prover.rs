@@ -1,4 +1,3 @@
-use std::ops::Index;
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial};
 use ark_poly::univariate::DensePolynomial;
@@ -55,7 +54,7 @@ pub fn commit_phase<F: PrimeField>(
     fri_layers.push(current_layer.clone());
     transcript.append(&current_layer.merkle_tree.root);
 
-    for i in 1..number_layers {
+    for _ in 1..number_layers {
         let random_r = transcript.generate_a_challenge();
         cur_coset = cur_coset.square();
         cur_domain_size /= 2;
