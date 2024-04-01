@@ -1,11 +1,13 @@
-use ark_ff::PrimeField;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::cmp::min;
+
+use ark_ff::{BigInteger, PrimeField};
+use rand::{Rng, rngs::StdRng, SeedableRng};
 
 use crate::hasher::CustomizedHash;
 
 /// A transcript generator in Fiat-Shamir transformation
 /// A challenge will be hash of `(x,i,last_r,g_i)`
-pub struct Transcript<F: PrimeField>{
+pub struct Transcript<F: PrimeField> {
     /// The last generated challenge
     last_r: F,
 
@@ -19,17 +21,17 @@ pub struct Transcript<F: PrimeField>{
     gi: F,
 
     /// The number of remaining queries that have not been hashed
-    remain_queries: u64
+    remain_queries: u64,
 }
 
-impl <F:PrimeField> Transcript<F> {
+impl<F: PrimeField> Transcript<F> {
     pub fn new() -> Self {
         Self {
             last_r: F::ZERO,
             x: F::from(StdRng::from_entropy().gen::<u128>()),
             i: 0,
             gi: F::ZERO,
-            remain_queries: 0
+            remain_queries: 0,
         }
     }
 
@@ -48,8 +50,7 @@ impl <F:PrimeField> Transcript<F> {
         self.i += 1;
         if self.remain_queries == 0 {
             self.gi = merkle_root;
-        }
-        else {
+        } else {
             self.gi = CustomizedHash::hash_two(self.gi, merkle_root);
         }
         self.remain_queries += 1;
@@ -65,7 +66,7 @@ impl <F:PrimeField> Transcript<F> {
         }
         let challenge = CustomizedHash::hash_two(
             CustomizedHash::hash_two(self.x, F::from(self.i as u128)),
-            CustomizedHash::hash_two(self.last_r, F::from(self.gi))
+            CustomizedHash::hash_two(self.last_r, self.gi),
         );
         self.last_r = challenge;
         self.remain_queries = 0;
@@ -91,25 +92,32 @@ impl <F:PrimeField> Transcript<F> {
     }
 
 
-    pub fn generate_a_index(&self) -> usize {
-        // Todo: implement generate function
-        1
+    /// Similar to generate_a_challenge
+    pub fn generate_an_index(&mut self) -> usize {
+        return Self::field_to_usize(&self.generate_a_challenge());
     }
 
-    pub fn generate_index_list(&self, number: usize) -> Vec<usize> {
-        // Todo: implement generate function
-        let mut indexes = Vec::new();
-        for i in 0..number {
-            indexes.push(i + 1);
+    /// Similar to generate_challenge_list
+    pub fn generate_index_list(&mut self, number: usize) -> Vec<usize> {
+        return self.generate_challenge_list(number).
+            iter().map(|&c| Self::field_to_usize(&c)).collect();
+    }
+
+    fn field_to_usize(el: &F) -> usize {
+        let bytes = el.into_bigint().to_bytes_le();
+        let mut res: u64 = 0;
+        for i in (0..min(bytes.len(), 8)).rev() {
+            res = (res << 8) | (bytes[i] as u64);
         }
-        indexes
+        return res as usize;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
+    use rand::prelude::StdRng;
+
     use crate::fields::goldilocks::Fq;
 
     use super::Transcript;
@@ -132,6 +140,31 @@ mod tests {
         let size = 5;
         transcript.append(Fq::from(StdRng::from_entropy().gen::<u128>()));
         let g = transcript.generate_challenge_list(size);
+        println!("{:?}", g);
+        assert_eq!(g.len(), size);
+        for i in 0..g.len() {
+            for j in 0..i {
+                assert_ne!(g[i], g[j]);
+            }
+        }
+    }
+
+    #[test]
+    fn test_generate_an_index() {
+        let mut t = Transcript::<Fq>::new();
+        t.append(Fq::from(182887487));
+        let g1 = t.generate_an_index();
+        let g2 = t.generate_an_index();
+        println!("{} {}", g1, g2);
+        assert_eq!(g1, g2);
+    }
+
+    #[test]
+    fn test_generate_index_list() {
+        let mut transcript = Transcript::<Fq>::new();
+        let size = 5;
+        transcript.append(Fq::from(StdRng::from_entropy().gen::<u128>()));
+        let g = transcript.generate_index_list(size);
         println!("{:?}", g);
         assert_eq!(g.len(), size);
         for i in 0..g.len() {

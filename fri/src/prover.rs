@@ -67,7 +67,7 @@ pub fn commit_phase<F: PrimeField>(
 pub fn query_phase<F: PrimeField>(
     number_of_queries: usize,
     domain_size: usize,
-    transcript: &Transcript<F>,
+    transcript: &mut Transcript<F>,
     fri_layers: &Vec<FriLayer<F>>
 ) -> (Vec<Decommitment<F>>, Vec<usize>) {
     if !fri_layers.is_empty() {
@@ -158,8 +158,8 @@ mod tests {
         let poly = DensePolynomial::from_coefficients_vec(coef);
         let number_of_layers :usize = 2;
         let coset = Fq::GENERATOR;
-        let (const_val, transcript, fri_layers) = commit_phase(&poly, &coset, 4, number_of_layers);
-        let (decommitment_list, challenge_list) = query_phase(1, 4, &transcript, &fri_layers);
+        let (const_val, mut transcript, fri_layers) = commit_phase(&poly, &coset, 4, number_of_layers);
+        let (decommitment_list, challenge_list) = query_phase(1, 4, &mut transcript, &fri_layers);
         println!("{:?}", fri_layers.len());
         let validate_challenge_list = transcript.generate_index_list(1).iter().map(|v| {
             *v % 4
