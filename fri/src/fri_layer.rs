@@ -17,14 +17,11 @@ impl <F: PrimeField> FriLayer<F> {
         domain_size: usize
     ) -> Self {
         let domain = <GeneralEvaluationDomain<F>>::new(domain_size).unwrap();
-
         let evaluations = domain.elements().map(|root| {
             let cur1 = root * coset;
             poly.evaluate(&cur1)
         }).collect::<Vec<_>>();
-
         let merkle_tree = MerkleTree::new(&evaluations);
-
 
         Self {
             evaluations,

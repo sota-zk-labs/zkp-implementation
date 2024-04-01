@@ -83,14 +83,13 @@ impl<F: PrimeField> Transcript<F> {
     pub fn generate_challenge_list(&mut self, number: usize) -> Vec<F> {
         self.check_append();
         let mut challenges = Vec::<F>::new();
-        for _ in 0..number {
-            let c = self.generate_a_challenge();
+        let mut c = self.generate_a_challenge();
+        for i in 0..number {
             challenges.push(c);
-            self.append(c);
+            c = CustomizedHash::hash_two(c, F::from(i as u128))
         }
         challenges
     }
-
 
     /// Similar to generate_a_challenge
     pub fn generate_an_index(&mut self) -> usize {
@@ -140,8 +139,11 @@ mod tests {
         let size = 5;
         transcript.append(Fq::from(StdRng::from_entropy().gen::<u128>()));
         let g = transcript.generate_challenge_list(size);
-        println!("{:?}", g);
+        let g2 = transcript.generate_challenge_list(size);
+        println!("g {:?}", g);
+        println!("g2 {:?}", g2);
         assert_eq!(g.len(), size);
+        assert_eq!(g, g2);
         for i in 0..g.len() {
             for j in 0..i {
                 assert_ne!(g[i], g[j]);
@@ -165,7 +167,9 @@ mod tests {
         let size = 5;
         transcript.append(Fq::from(StdRng::from_entropy().gen::<u128>()));
         let g = transcript.generate_index_list(size);
-        println!("{:?}", g);
+        let g2 = transcript.generate_index_list(size);
+        println!("{:?} {:?}", g, g2);
+        assert_eq!(g, g2);
         assert_eq!(g.len(), size);
         for i in 0..g.len() {
             for j in 0..i {

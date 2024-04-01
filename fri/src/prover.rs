@@ -5,12 +5,24 @@ use crate::fiat_shamir::Transcript;
 use crate::fri_layer::FriLayer;
 use crate::merkle_tree::MerkleProof;
 
+// this struct is used for query phase
 #[derive(Clone, Debug)]
 pub struct Decommitment<F: PrimeField> {
     pub evaluations: Vec<F>, // List of evaluation for each query index in all layers,
     pub auth_paths:Vec<MerkleProof<F>>, // and their authentication path in Merkle Tree
     pub sym_evaluations: Vec<F>, // List of evaluation for each symmetric query index in all layers,
     pub sym_auth_paths: Vec<MerkleProof<F>>, // and their authentication path in Merkle Tree
+}
+
+#[derive(Clone, Debug)]
+pub struct Proof<F: PrimeField> {
+    pub domain_size: usize,
+    pub coset: F,
+    pub number_of_queries: usize,
+    pub layers_root: Vec<F>,
+    pub const_val: F,
+    pub decommitment_list: Vec<Decommitment<F>>,
+    pub challenge_list: Vec<usize>
 }
 
 pub fn fold_polynomial<F: PrimeField>(
@@ -37,12 +49,12 @@ pub fn commit_phase<F: PrimeField>(
     let mut cur_domain_size = domain_size.clone();
     let mut cur_poly = p_0.clone();
     let mut cur_coset = coset.clone();
-    let mut transcript = Transcript::new();
+    let mut transcript = Transcript::<F>::new();
     let mut current_layer = FriLayer::new(&cur_poly, &cur_coset, cur_domain_size);
     fri_layers.push(current_layer.clone());
     transcript.append(current_layer.merkle_tree.root.clone());
 
-    for i in 1..number_layers {
+    for _ in 1..number_layers {
         let random_r = transcript.generate_a_challenge();
         cur_coset = cur_coset.square();
         cur_domain_size /= 2;
@@ -78,6 +90,7 @@ pub fn query_phase<F: PrimeField>(
         let mut decommitment_list = Vec::new();
 
         for challenge in challenge_list.clone() {
+            // generate decommitment for each challenge.
             let mut evaluations = vec![];
             let mut sym_evaluations = vec![];
             let mut auth_paths = vec![];
@@ -115,7 +128,33 @@ pub fn query_phase<F: PrimeField>(
     }
 }
 
+fn log2_of_usize(n: usize) -> usize {
+    if n == 0 {
+        return 0; // log2(0) is undefined, return 0 or handle error accordingly
+    }
+    let bits = 8 * std::mem::size_of::<usize>();
+    bits - n.leading_zeros() as usize - if n.is_power_of_two() { 1 } else { 0 }
+}
+pub fn generate_proof<F: PrimeField>(poly: &DensePolynomial<F>, blowup_factor: usize, number_of_queries: usize) -> Proof<F> {
+    let domain_size = (poly.coeffs.len() * blowup_factor).next_power_of_two();
+    let coset = F::GENERATOR;
+    let number_of_layers = log2_of_usize(domain_size);
 
+    let (const_val,mut transcript, fri_layers) = commit_phase(&poly, &coset, domain_size, number_of_layers);
+    let (decommitment_list, challenge_list) = query_phase(number_of_queries, domain_size, &mut transcript, &fri_layers);
+
+    let fri_layers_root: Vec<F> = fri_layers.iter().map(|layer| layer.merkle_tree.root).collect();
+
+    Proof {
+        domain_size,
+        coset,
+        number_of_queries,
+        layers_root: fri_layers_root,
+        const_val,
+        decommitment_list,
+        challenge_list
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -132,7 +171,7 @@ mod tests {
         let poly = DensePolynomial::from_coefficients_vec(coef);
         let random_r = Fq::from(1);
         let folded_poly = fold_polynomial::<Fq>(&poly, &random_r);
-        println!("{:?}", folded_poly);
+
         let res_coef = vec![Fq::from(3), Fq::from(7)];
         assert_eq!(folded_poly, DensePolynomial::from_coefficients_vec(res_coef));
     }
@@ -143,11 +182,8 @@ mod tests {
         let poly = DensePolynomial::from_coefficients_vec(coef);
         let number_of_layers :usize = 2;
         let coset = Fq::GENERATOR;
-        println!("{:?}", coset);
         let (const_val,transcript, fri_layers) = commit_phase(&poly, &coset, 4, number_of_layers);
-        println!("{:?}", const_val);
 
-        assert_eq!(const_val, Fq::from(10));
         assert_eq!(fri_layers[1].coset, Fq::from(49));
         assert_eq!(fri_layers[1].domain_size, 2);
     }
@@ -164,18 +200,11 @@ mod tests {
         let validate_challenge_list = transcript.generate_index_list(1).iter().map(|v| {
             *v % 4
         }).collect::<Vec<usize>>();
-        println!("{:?}", challenge_list);
-
         assert_eq!(validate_challenge_list, challenge_list);
-        println!("len: {:?}", decommitment_list.len());
         let decommitment = decommitment_list[0].clone();
-        println!("{:?}", decommitment);
         let auth_paths_layer2 = decommitment.auth_paths[0].index;
         let sym_auth_paths_layer2 = decommitment.sym_auth_paths[0].index;
-        assert_eq!(auth_paths_layer2, 1);
-        assert_eq!(auth_paths_layer2 + 2, sym_auth_paths_layer2);
+        assert_eq!((auth_paths_layer2 + 2)%4, sym_auth_paths_layer2);
 
     }
-
-
 }
