@@ -89,6 +89,21 @@ impl <F:PrimeField> Transcript<F> {
         }
         challenges
     }
+
+
+    pub fn generate_a_index(&self) -> usize {
+        // Todo: implement generate function
+        1
+    }
+
+    pub fn generate_index_list(&self, number: usize) -> Vec<usize> {
+        // Todo: implement generate function
+        let mut indexes = Vec::new();
+        for i in 0..number {
+            indexes.push(i + 1);
+        }
+        indexes
+    }
 }
 
 #[cfg(test)]
