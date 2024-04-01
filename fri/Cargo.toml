@@ -6,6 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ark-poly = "0.4.2"
-ark-ff = "0.4.2"
+ark-poly = "0.4.0"
+ark-ff = "0.4.0"
 sha2 = "0.11.0-pre.3"
+poseidon-rs = "0.0.10"
+ark-bn254 = { version = "0.4.0" }
+ark-std = { version = "0.4.0" }
