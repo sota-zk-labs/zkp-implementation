@@ -113,7 +113,7 @@ mod tests {
         let proof = generate_proof(&poly, blowup_factor, number_of_queries);
         // println!("Decommitment: {:?}", proof.decommitment_list);
         let result = verify(proof);
-        //println!("{:?}", result.clone().unwrap());
+        println!("{:?}", result.clone().unwrap());
         assert_eq!(result.is_ok(), true);
     }
 
@@ -127,7 +127,7 @@ mod tests {
         let proof = generate_proof(&poly, blowup_factor, number_of_queries);
         // println!("Decommitment: {:?}", proof.decommitment_list);
         let result = verify(proof);
-        //println!("{:?}", result.clone().unwrap());
+        println!("{:?}", result.clone().unwrap());
         assert_eq!(result.is_ok(), true);
     }
 

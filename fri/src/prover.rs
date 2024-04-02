@@ -204,7 +204,6 @@ mod tests {
         let decommitment = decommitment_list[0].clone();
         let auth_paths_layer2 = decommitment.auth_paths[0].index;
         let sym_auth_paths_layer2 = decommitment.sym_auth_paths[0].index;
-        assert_eq!((auth_paths_layer2 + 2)%4, sym_auth_paths_layer2);
-
+        assert_eq!((auth_paths_layer2 + 2) % 4, sym_auth_paths_layer2);
     }
 }
