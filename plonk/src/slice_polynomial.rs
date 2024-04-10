@@ -38,12 +38,9 @@ impl SlidePoly {
     }
 
     pub fn get_degree(&self) -> usize {
-        self.degree.clone()
+        self.degree
     }
 
-    // pub fn get_slices(&self) -> &[Polynomial; 3] {
-    //     &self.slices
-    // }
     pub fn commit(&self, scheme: &KzgScheme) -> [KzgCommitment; 3] {
         self.slices.clone().map(|slice| scheme.commit(&slice))
     }

@@ -300,8 +300,10 @@ impl CompiledCircuit {
                                         bar_ssigma_2: &Fr, bar_z_w: &Fr, pi_e: &Fr, tx_compact: &Polynomial,
                                         z_x: &Polynomial, ax: &Polynomial, bx: &Polynomial, cx: &Polynomial, z_wx: &Polynomial) -> Polynomial
     {
-        let mut line1 = self.gate_constraint.q_mx().mul(*bar_a * *bar_b) + self.gate_constraint.q_lx().mul(*bar_a)
-            + self.gate_constraint.q_rx().mul(*bar_b) + self.gate_constraint.q_ox().mul(*bar_c)
+        let mut line1 = self.gate_constraint.q_mx().mul(*bar_a * *bar_b)
+            + self.gate_constraint.q_lx().mul(*bar_a)
+            + self.gate_constraint.q_rx().mul(*bar_b)
+            + self.gate_constraint.q_ox().mul(*bar_c)
             + self.gate_constraint.q_cx().clone();
         line1.coeffs[0] += pi_e;
 

@@ -1,10 +1,13 @@
 use std::ops::Mul;
+
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_ec::PairingEngine;
 use ark_poly::{EvaluationDomain, Polynomial};
+
 use kzg::{KzgCommitment, KzgScheme};
-use crate::CompiledCircuit;
+
 use crate::challenge::ChallengeParse;
+use crate::CompiledCircuit;
 use crate::prover::Proof;
 
 impl CompiledCircuit {
@@ -18,7 +21,7 @@ impl CompiledCircuit {
         #[cfg(test)]
         println!("Verify challenges");
 
-        let (alpha, beta, gamma, evaluation_challenge, v, u) = self.verify_challenges(&proof);
+        let (alpha, beta, gamma, evaluation_challenge, v, u) = self.get_challenges(&proof);
 
         assert_eq!(u, proof.u, "Verify: Challenge verification failed.");
 
@@ -41,7 +44,7 @@ impl CompiledCircuit {
         println!("Compute [D]");
 
         let d_line1 = q_m_c.mul(proof.bar_a * proof.bar_b) + q_l_c.mul(proof.bar_a) + q_r_c.mul(proof.bar_b)
-        + q_o_c.mul(proof.bar_c) + q_c_c;
+            + q_o_c.mul(proof.bar_c) + q_c_c;
 
         let d_line2 = proof.z_commit.mul((proof.bar_a + beta * evaluation_challenge + gamma)
             * (proof.bar_b + beta * self.copy_constraint.k1() * evaluation_challenge + gamma)
@@ -51,7 +54,7 @@ impl CompiledCircuit {
         let d_line3 = ssigma_3_c.mul((proof.bar_a + beta * proof.bar_ssigma_1 + gamma)
             * (proof.bar_b + beta * proof.bar_ssigma_2 + gamma) * alpha * beta * proof.bar_z_w);
 
-        let d_line4 = (proof.t_lo_commit + proof.t_mid_commit.mul(Self::power(&evaluation_challenge, proof.degree.clone() + 1) )
+        let d_line4 = (proof.t_lo_commit + proof.t_mid_commit.mul(Self::power(&evaluation_challenge, proof.degree.clone() + 1))
             + proof.t_hi_commit.mul(Self::power(&evaluation_challenge, proof.degree.clone() * 2 + 2))).mul(z_h_e);
 
         let d = d_line1 + d_line2 - d_line3 - d_line4;
@@ -73,7 +76,7 @@ impl CompiledCircuit {
 
         let pairing_left_side = Bls12_381::pairing(
             (proof.w_ev_x_commit + proof.w_ev_wx_commit.mul(u)).0,
-            self.srs.get_g2s_ref().clone()
+            self.srs.get_g2s_ref().clone(),
         );
 
         #[cfg(test)]
@@ -81,13 +84,13 @@ impl CompiledCircuit {
         let pairing_right_side = Bls12_381::pairing(
             (proof.w_ev_x_commit.mul(evaluation_challenge) + proof.w_ev_wx_commit.mul(u * evaluation_challenge * w)
                 + f - e).0,
-            self.srs.get_g2_ref().clone()
+            self.srs.get_g2_ref().clone(),
         );
 
         #[cfg(test)]
         println!("Check pairing");
 
-        assert_eq!(pairing_left_side,pairing_right_side, "Verify: Pairing failed, rejected");
+        assert_eq!(pairing_left_side, pairing_right_side, "Verify: Pairing failed, rejected");
 
         println!("Accepted!!!");
 
@@ -96,7 +99,6 @@ impl CompiledCircuit {
 
     fn get_circuit_commitment(&self) -> (KzgCommitment, KzgCommitment, KzgCommitment, KzgCommitment,
                                          KzgCommitment, KzgCommitment, KzgCommitment, KzgCommitment) {
-
         let scheme = KzgScheme::new(&self.srs);
         let q_m_c = scheme.commit(self.gate_constraint.q_mx());
         let q_l_c = scheme.commit(self.gate_constraint.q_lx());
@@ -124,7 +126,7 @@ impl CompiledCircuit {
         return res;
     }
 
-    fn verify_challenges(&self, proof: &Proof) -> (Fr, Fr, Fr, Fr, Fr, Fr){
+    fn get_challenges(&self, proof: &Proof) -> (Fr, Fr, Fr, Fr, Fr, Fr) {
         let scheme = KzgScheme::new(&self.srs);
         let commitments = [proof.a_commit.clone(), proof.b_commit.clone(), proof.c_commit.clone()];
         let mut challenge = ChallengeParse::with_digest(&commitments);

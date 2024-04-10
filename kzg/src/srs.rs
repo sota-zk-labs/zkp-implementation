@@ -53,8 +53,4 @@ impl Srs {
     pub fn get_g2s_ref(&self) -> &G2Point {
         &self.g2s
     }
-
-
-
-
 }
