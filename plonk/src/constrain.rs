@@ -1,6 +1,6 @@
 use ark_bls12_381::Fr;
+use crate::types::Polynomial;
 
-use crate::Polynomial;
 
 #[derive(Debug)]
 pub struct GateConstraints {
@@ -35,11 +35,9 @@ impl GateConstraints {
     pub fn f_ax(&self) -> &Polynomial {
         &self.f_ax
     }
-
     pub fn f_bx(&self) -> &Polynomial {
         &self.f_bx
     }
-
     pub fn f_cx(&self) -> &Polynomial {
         &self.f_cx
     }

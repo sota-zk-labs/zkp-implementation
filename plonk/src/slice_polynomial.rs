@@ -2,31 +2,32 @@ use std::ops::Mul;
 
 use ark_bls12_381::Fr;
 use ark_ff::{One, Zero};
-use ark_poly::{Polynomial as Poly, UVPolynomial};
+use ark_poly::{DenseUVPolynomial, Polynomial as Poly};
 use ark_poly::univariate::SparsePolynomial;
 
-use kzg::{KzgCommitment, KzgScheme};
+use kzg::commitment::KzgCommitment;
+use kzg::scheme::KzgScheme;
 
-use crate::Polynomial;
+use crate::types::Polynomial;
 
 #[derive(Debug)]
-pub(crate) struct SlidePoly {
+pub(crate) struct SlicePoly {
     slices: [Polynomial; 3],
     degree: usize,
 }
 
-impl SlidePoly {
+impl SlicePoly {
     pub fn new(polynomial: Polynomial, degree: usize) -> Self {
         assert!(polynomial.degree() <= 3 * degree + 5);
-        let coeffs = polynomial.coeffs;
+        let coefficients = polynomial.coeffs;
 
-        let mut tmp = coeffs.len() / 3;
-        if tmp * 3 < coeffs.len() {
+        let mut tmp = coefficients.len() / 3;
+        if tmp * 3 < coefficients.len() {
             tmp += 1;
         }
 
         let mut slices = [(); 3].map(|_| Polynomial::zero());
-        coeffs
+        coefficients
             .chunks(tmp)
             .map(|coeffs| Polynomial::from_coefficients_slice(coeffs))
             .enumerate()
@@ -38,12 +39,9 @@ impl SlidePoly {
     }
 
     pub fn get_degree(&self) -> usize {
-        self.degree.clone()
+        self.degree
     }
 
-    // pub fn get_slices(&self) -> &[Polynomial; 3] {
-    //     &self.slices
-    // }
     pub fn commit(&self, scheme: &KzgScheme) -> [KzgCommitment; 3] {
         self.slices.clone().map(|slice| scheme.commit(&slice))
     }
@@ -54,7 +52,7 @@ impl SlidePoly {
                 (self.degree + 1) * index,
                 Fr::one(),
             )]);
-            slice.mul(exponent.evaluate(&point))
+            slice.mul(exponent.evaluate(point))
         }).reduce(|one, other| one + other).unwrap()
     }
 }
