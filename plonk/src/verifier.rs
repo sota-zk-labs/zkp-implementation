@@ -13,6 +13,8 @@ use crate::challenge::ChallengeGenerator;
 use crate::compiled_circuit::CompiledCircuit;
 use crate::prover::Proof;
 
+/// Verifies a zero-knowledge proof for a compiled circuit.
+///
 pub fn verify<T: Digest + Default>(
     compiled_circuit: &CompiledCircuit,
     proof: Proof,
@@ -151,6 +153,7 @@ pub fn verify<T: Digest + Default>(
     Ok(())
 }
 
+/// Gets commitments of the circuit via compiled_circuit
 fn get_circuit_commitment(
     compiled_circuit: &CompiledCircuit,
 ) -> (
@@ -178,6 +181,7 @@ fn get_circuit_commitment(
     )
 }
 
+/// Verifies Fiat-Shamir challenges.
 fn verify_challenges<T: Digest + Default>(
     proof: &Proof,
     compiled_circuit: &CompiledCircuit,
