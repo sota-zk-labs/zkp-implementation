@@ -1,20 +1,32 @@
 use crate::types::Polynomial;
 use ark_bls12_381::Fr;
 
+/// Represents gate constraints for a compiled circuit.
 #[derive(Debug)]
 pub struct GateConstraints {
+    /// Polynomial representing the constraint function for the A wire.
     f_ax: Polynomial,
+    /// Polynomial representing the constraint function for the B wire.
     f_bx: Polynomial,
+    /// Polynomial representing the constraint function for the C wire.
     f_cx: Polynomial,
+    /// Polynomial representing the constraint function for the Q_L.
     q_lx: Polynomial,
+    /// Polynomial representing the constraint function for the Q_R.
     q_rx: Polynomial,
+    /// Polynomial representing the constraint function for the Q_O.
     q_ox: Polynomial,
+    /// Polynomial representing the constraint function for the Q_M.
     q_mx: Polynomial,
+    /// Polynomial representing the constraint function for the Q_C.
     q_cx: Polynomial,
+    /// Polynomial representing the constraint function for the Public input Pi.
     pi_x: Polynomial,
 }
 
 impl GateConstraints {
+    /// Creates a new instance of `GateConstraints`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         f_ax: Polynomial,
         f_bx: Polynomial,
@@ -68,16 +80,23 @@ impl GateConstraints {
     }
 }
 
+/// Represents copy constraints for a compiled circuit.
 #[derive(Debug)]
 pub struct CopyConstraints {
+    /// Polynomial representing the first prescribe function (sigma_1).
     s_sigma_1: Polynomial,
+    /// Polynomial representing the second prescribe function (sigma_2).
     s_sigma_2: Polynomial,
+    /// Polynomial representing the third prescribe function (sigma_3).
     s_sigma_3: Polynomial,
+    /// First constant factor used in copy constraint calculations.
     k1: Fr,
+    /// Second constant factor used in copy constraint calculations.
     k2: Fr,
 }
 
 impl CopyConstraints {
+    /// Creates a new instance of `CopyConstraints`.
     pub fn new(
         s_sigma_1: Polynomial,
         s_sigma_2: Polynomial,

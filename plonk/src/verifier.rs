@@ -13,6 +13,8 @@ use crate::challenge::ChallengeGenerator;
 use crate::compiled_circuit::CompiledCircuit;
 use crate::prover::Proof;
 
+/// Verifies a zero-knowledge proof for a compiled circuit.
+///
 pub fn verify<T: Digest + Default>(
     compiled_circuit: &CompiledCircuit,
     proof: Proof,
@@ -22,12 +24,12 @@ pub fn verify<T: Digest + Default>(
     #[cfg(test)]
     println!("Precompute");
     let (q_m_c, q_l_c, q_r_c, q_o_c, q_c_c, s_sigma_1_c, s_sigma_2_c, s_sigma_3_c) =
-        get_circuit_commitment(&compiled_circuit);
+        get_circuit_commitment(compiled_circuit);
 
     #[cfg(test)]
     println!("Verify challenges");
     let (alpha, beta, gamma, evaluation_challenge, v, u) =
-        verify_challenges::<T>(&proof, &compiled_circuit);
+        verify_challenges::<T>(&proof, compiled_circuit);
 
     if u != proof.u {
         return Err(String::from("Verify: Challenge verification failed."));
@@ -37,7 +39,7 @@ pub fn verify<T: Digest + Default>(
     let scheme = KzgScheme::new(compiled_circuit.srs());
     let w = domain.element(1);
 
-    let z_h_e = evaluation_challenge.pow(&BigInt::new([domain.size() as u64])) - Fr::from(1);
+    let z_h_e = evaluation_challenge.pow(BigInt::new([domain.size() as u64])) - Fr::from(1);
     let l_1_e =
         z_h_e / (Fr::from(compiled_circuit.size as u128) * (evaluation_challenge - Fr::from(1)));
     let p_i_e = compiled_circuit
@@ -88,10 +90,10 @@ pub fn verify<T: Digest + Default>(
     let d_line4 = (proof.t_lo_commit
         + proof
             .t_mid_commit
-            .mul(evaluation_challenge.pow(&BigInt::new([proof.degree as u64 + 1])))
+            .mul(evaluation_challenge.pow(BigInt::new([proof.degree as u64 + 1])))
         + proof
             .t_hi_commit
-            .mul(evaluation_challenge.pow(&BigInt::new([proof.degree as u64 * 2 + 2]))))
+            .mul(evaluation_challenge.pow(BigInt::new([proof.degree as u64 * 2 + 2]))))
     .mul(z_h_e);
 
     let d = d_line1 + d_line2 - d_line3 - d_line4;
@@ -122,7 +124,7 @@ pub fn verify<T: Digest + Default>(
 
     let pairing_left_side = Bls12_381::pairing(
         (proof.w_ev_x_commit.clone() + proof.w_ev_wx_commit.clone().mul(u)).0,
-        compiled_circuit.srs().g2s().clone(),
+        compiled_circuit.srs().g2s(),
     );
 
     #[cfg(test)]
@@ -136,7 +138,7 @@ pub fn verify<T: Digest + Default>(
             + f
             - e)
             .0,
-        compiled_circuit.srs().g2().clone(),
+        compiled_circuit.srs().g2(),
     );
 
     #[cfg(test)]
@@ -151,6 +153,7 @@ pub fn verify<T: Digest + Default>(
     Ok(())
 }
 
+/// Gets commitments of the circuit via compiled_circuit
 fn get_circuit_commitment(
     compiled_circuit: &CompiledCircuit,
 ) -> (
@@ -178,6 +181,7 @@ fn get_circuit_commitment(
     )
 }
 
+/// Verifies Fiat-Shamir challenges.
 fn verify_challenges<T: Digest + Default>(
     proof: &Proof,
     compiled_circuit: &CompiledCircuit,

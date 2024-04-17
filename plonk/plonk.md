@@ -47,7 +47,7 @@ Prior to circuit generation, it's essential to parse it into smaller equations:
 - x * x = m
 - y * y = n
 - z * z = q
-- m + n = z
+- m + n = q
 ```
 
 Consider each equation above as a gate. Here is the table of gates:

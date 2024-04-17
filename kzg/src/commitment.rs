@@ -5,6 +5,7 @@ use crate::types::G1Point;
 pub struct KzgCommitment(pub G1Point);
 
 impl KzgCommitment {
+    /// A reference to the inner `G1Point` contained within the commitment.
     pub fn inner(&self) -> &G1Point {
         &self.0
     }
@@ -24,6 +25,10 @@ mod tests {
     use crate::types::{G1Point, Poly};
 
     #[test]
+    /// Tests the commitment functionality in the KZG scheme.
+    ///
+    /// This test verifies the correctness of committing to a polynomial,
+    /// opening the commitment, and verifying the opening.
     fn commit() {
         let secret = Fr::from(2);
         let srs = Srs::new_from_secret(secret, 10);
@@ -45,6 +50,10 @@ mod tests {
     }
 
     #[test]
+    /// Tests the scalar multiplication of commitments.
+    ///
+    /// This test validates the correctness of scalar multiplying a commitment
+    /// by a factor in the KZG scheme.
     fn scalar_mul() {
         let srs = Srs::new(5);
         let scheme = KzgScheme::new(srs);

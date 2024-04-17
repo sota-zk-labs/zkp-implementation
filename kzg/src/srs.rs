@@ -2,30 +2,49 @@ use std::ops::Mul;
 
 use ark_bls12_381::Fr;
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::One;
-use ark_ff::UniformRand;
+use ark_ff::{One, UniformRand};
 
 use crate::types::{G1Point, G2Point};
 
-/// Structured reference string
+/// Structured Reference String (SRS) used in the KZG scheme.
+///
+/// The `Srs` struct represents the structured reference string used in the KZG scheme,
+/// containing precomputed values necessary for commitment and verification.
 #[derive(Debug, Clone)]
 pub struct Srs {
-    /// G1 times the secret's powers
+    /// Points in G1, each equals to generator point multiplied by the secret's powers.
     g1_points: Vec<G1Point>,
-    /// generator on G2
+    /// Generator point in G2.
     g2: G2Point,
-    /// generator on G2 times the secret
+    /// Generator point in G2 multiplied by the secret.
     g2s_point: G2Point,
 }
 
 impl Srs {
-    /// generate
+    /// Generates a new SRS with a random secret and the specified circuit size.
+    ///
+    /// # Parameters
+    ///
+    /// - `circuit_size`: The size of the circuit.
+    ///
+    /// # Returns
+    ///
+    /// A new `Srs` instance.
     pub fn new(circuit_size: usize) -> Self {
         let s = Fr::rand(&mut rand::thread_rng());
         Self::new_from_secret(s, circuit_size)
     }
 
-    /// only use it for testing purposes
+    /// Generates a new SRS with the provided secret and the specified circuit size.
+    ///
+    /// # Parameters
+    ///
+    /// - `secret`: The secret used for generating the SRS.
+    /// - `circuit_size`: The size of the circuit.
+    ///
+    /// # Returns
+    ///
+    /// A new `Srs` instance.
     pub fn new_from_secret(secret: Fr, circuit_size: usize) -> Self {
         let g1 = G1Point::generator();
 
@@ -51,14 +70,29 @@ impl Srs {
 }
 
 impl Srs {
+    /// Returns the precomputed points in G1.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing points in G1.
     pub fn g1_points(&self) -> Vec<G1Point> {
         self.g1_points.clone()
     }
 
+    /// Returns the generator point in G2.
+    ///
+    /// # Returns
+    ///
+    /// The generator point in G2.
     pub fn g2(&self) -> G2Point {
         self.g2
     }
 
+    /// Returns the generator point in G2 multiplied by the secret.
+    ///
+    /// # Returns
+    ///
+    /// The generator point in G2 multiplied by the secret.
     pub fn g2s(&self) -> G2Point {
         self.g2s_point
     }

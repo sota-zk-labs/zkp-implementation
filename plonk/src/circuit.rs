@@ -8,9 +8,10 @@ use ark_poly::{EvaluationDomain, Evaluations, GeneralEvaluationDomain, Polynomia
 use kzg::srs::Srs;
 
 use crate::compiled_circuit::CompiledCircuit;
-use crate::constrain::{CopyConstraints, GateConstraints};
+use crate::constraint::{CopyConstraints, GateConstraints};
 use crate::gate::{Gate, Position};
 
+// Represents a circuit consisting of gates and values.
 pub struct Circuit {
     gates: Vec<Gate>,
     vals: Vec<Arc<Vec<Fr>>>,
@@ -42,6 +43,7 @@ impl Circuit {
 }
 
 impl Circuit {
+    /// Adds an addition gate to the circuit.
     pub fn add_addition_gate(
         mut self,
         a: (usize, usize, Fr),
@@ -63,6 +65,7 @@ impl Circuit {
         self
     }
 
+    /// Adds a multiplication gate to the circuit.
     pub fn add_multiplication_gate(
         mut self,
         a: (usize, usize, Fr),
@@ -84,6 +87,7 @@ impl Circuit {
         self
     }
 
+    /// Adds a constant gate to the circuit.
     pub fn add_constant_gate(
         mut self,
         a: (usize, usize, Fr),
@@ -106,11 +110,13 @@ impl Circuit {
         self
     }
 
+    /// Adds a dummy gate to the circuit.
     pub fn add_dummy_gate(&mut self) {
         let gate = Gate::new_dummy_gate();
         self.gates.push(gate);
     }
 
+    /// Gets the assignment of the circuit
     pub(crate) fn get_assignment(&self) -> HashMap<&str, Vec<Fr>> {
         let mut result = HashMap::default();
         result.insert(Self::VEC_A, vec![]);
@@ -141,11 +147,12 @@ impl Circuit {
         result
     }
 
+    /// Finds the cosets for permutation.
     fn find_cosets(&self, len: usize) -> (Vec<Fr>, Vec<Fr>, Fr, Fr) {
         let domain = <GeneralEvaluationDomain<Fr>>::new(len).unwrap();
         let roots = domain.elements().collect::<Vec<_>>();
 
-        let k1 = *roots.get(0).unwrap() + Fr::one();
+        let k1 = roots.first().unwrap() + &Fr::one();
         let k2 = k1 + Fr::one();
         let coset1 = roots.iter().map(|root| *root * k1).collect();
         let coset2 = roots.iter().map(|root| *root * k2).collect();
@@ -153,6 +160,7 @@ impl Circuit {
         (coset1, coset2, k1, k2)
     }
 
+    /// Calculates the Copy constraints.
     fn cal_permutation(&self) -> CopyConstraints {
         let len = self.gates.len();
         let domain = <GeneralEvaluationDomain<Fr>>::new(len).unwrap();
@@ -174,13 +182,13 @@ impl Circuit {
                     todo!()
                 };
 
-                return if *i_1 == 0 {
-                    roots[*i_2].clone()
+                if *i_1 == 0 {
+                    roots[*i_2]
                 } else if *i_1 == 1 {
-                    coset1[*i_2].clone()
+                    coset1[*i_2]
                 } else {
-                    coset2[*i_2].clone()
-                };
+                    coset2[*i_2]
+                }
             };
 
             *sigma_1.get_mut(index).unwrap() = map_element(gate.get_a_wire());
@@ -195,6 +203,7 @@ impl Circuit {
         CopyConstraints::new(s_sigma_1, s_sigma_2, s_sigma_3, k1, k2)
     }
 
+    /// Pads the circuit with dummy gates to make its size a power of 2.
     fn pad_circuit(mut self) -> Self {
         let len = self.gates.len();
 
@@ -207,6 +216,7 @@ impl Circuit {
         self
     }
 
+    /// Compiles the circuit into a compiled circuit.
     pub fn compile(mut self) -> Result<CompiledCircuit, String> {
         self = self.pad_circuit();
 
@@ -215,14 +225,14 @@ impl Circuit {
         let srs = Srs::new(circuit_size);
         let assignment = self.get_assignment();
 
-        let interpolated_assignment = assignment
+        let mut interpolated_assignment = assignment
             .into_iter()
             .map(|(k, v)| (k, Evaluations::from_vec_and_domain(v, domain).interpolate()))
             .collect::<HashMap<_, _>>();
 
         // check the computation of gate constraints
         let roots = domain.elements().collect::<Vec<_>>();
-        let w = roots.get(0).unwrap();
+        let w = roots.first().unwrap();
         let tmp = interpolated_assignment
             .get(Self::VEC_A)
             .unwrap()
@@ -272,15 +282,15 @@ impl Circuit {
         }
 
         let gate_constraints = GateConstraints::new(
-            interpolated_assignment.get(Self::VEC_A).unwrap().clone(),
-            interpolated_assignment.get(Self::VEC_B).unwrap().clone(),
-            interpolated_assignment.get(Self::VEC_C).unwrap().clone(),
-            interpolated_assignment.get(Self::VEC_QL).unwrap().clone(),
-            interpolated_assignment.get(Self::VEC_QR).unwrap().clone(),
-            interpolated_assignment.get(Self::VEC_QO).unwrap().clone(),
-            interpolated_assignment.get(Self::VEC_QM).unwrap().clone(),
-            interpolated_assignment.get(Self::VEC_QC).unwrap().clone(),
-            interpolated_assignment.get(Self::VEC_PI).unwrap().clone(),
+            interpolated_assignment.remove(Self::VEC_A).unwrap(),
+            interpolated_assignment.remove(Self::VEC_B).unwrap(),
+            interpolated_assignment.remove(Self::VEC_C).unwrap(),
+            interpolated_assignment.remove(Self::VEC_QL).unwrap(),
+            interpolated_assignment.remove(Self::VEC_QR).unwrap(),
+            interpolated_assignment.remove(Self::VEC_QO).unwrap(),
+            interpolated_assignment.remove(Self::VEC_QM).unwrap(),
+            interpolated_assignment.remove(Self::VEC_QC).unwrap(),
+            interpolated_assignment.remove(Self::VEC_PI).unwrap(),
         );
 
         let copy_constraints = self.cal_permutation();

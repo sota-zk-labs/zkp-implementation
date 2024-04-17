@@ -17,26 +17,45 @@ use crate::compiled_circuit::CompiledCircuit;
 use crate::slice_polynomial::SlicePoly;
 use crate::types::Polynomial;
 
+/// Struct representing a proof.
 pub struct Proof {
+    /// Commitment of wire polynomial a(x)
     pub a_commit: KzgCommitment,
+    /// Commitment of wire polynomial b(x)
     pub b_commit: KzgCommitment,
+    /// Commitment of wire polynomial c(x)
     pub c_commit: KzgCommitment,
+    /// Commitment of permutation polynomial z(x)
     pub z_commit: KzgCommitment,
+    /// Commitment of the first part of quotient polynomial t(X)
     pub t_lo_commit: KzgCommitment,
+    /// Commitment of the second part of quotient polynomial t(X)
     pub t_mid_commit: KzgCommitment,
+    /// Commitment of the third part of quotient polynomial t(X)
     pub t_hi_commit: KzgCommitment,
+    /// Commitment of opening proof polynomial w_ev_x
     pub w_ev_x_commit: KzgCommitment,
+    /// Commitment of opening proof polynomial w_ev_wx
     pub w_ev_wx_commit: KzgCommitment,
+    /// Opening evaluations of a(x)
     pub bar_a: Fr,
+    /// Opening evaluations of b(x)
     pub bar_b: Fr,
+    /// Opening evaluations of c(x)
     pub bar_c: Fr,
+    /// Opening evaluations of s_sigma_1(x)
     pub bar_s_sigma_1: Fr,
+    /// Opening evaluations of s_sigma_2(x)
     pub bar_s_sigma_2: Fr,
+    /// Opening evaluations of z_w(x)
     pub bar_z_w: Fr,
+    /// Multipoint evaluation challenge
     pub u: Fr,
+    /// Degree of each part of quotient polynomial
     pub degree: usize,
 }
 
+/// Generates a proof for the compiled circuit.
 pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -> Proof {
     println!("Generating proof...");
 
@@ -271,6 +290,7 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
     }
 }
 
+/// Subtracts a parameter from a polynomial.
 fn poly_sub_para(poly: &Polynomial, para: &Fr) -> Polynomial {
     let mut tmp = poly.clone();
     tmp.coeffs[0] -= para;
@@ -354,6 +374,8 @@ fn compute_acc(
     (acc, acc_w)
 }
 
+/// Computes the accumulator polynomials `acc(x)` and `acc(w*x)` for a given beta, gamma, evaluation domain, and compiled circuit.
+#[allow(clippy::too_many_arguments)]
 fn compute_quotient_polynomial(
     beta: &Fr,
     gamma: &Fr,
@@ -383,7 +405,7 @@ fn compute_quotient_polynomial(
         .mul(&(bx.clone() + DensePolynomial::from_coefficients_vec(vec![*gamma, *beta * k1])))
         .mul(&(cx.clone() + DensePolynomial::from_coefficients_vec(vec![*gamma, *beta * k2])))
         .mul(z_x)
-        .mul(alpha.clone());
+        .mul(*alpha);
 
     let line3 = (ax.clone()
         + compiled_circuit
@@ -408,7 +430,7 @@ fn compute_quotient_polynomial(
             + DensePolynomial::from_coefficients_vec(vec![*gamma])),
     )
     .mul(z_wx)
-    .mul(alpha.clone());
+    .mul(*alpha);
 
     let line23 = &line2 - &line3;
 
@@ -439,6 +461,8 @@ fn divide_by_vanishing_poly<'a>(
     Ok(result)
 }
 
+/// Divides a polynomial by the vanishing polynomial of the given domain.
+/// Returns the quotient polynomial if the division is successful, otherwise returns an error indicating a remainder.
 pub(crate) fn l1_poly(domain: &GeneralEvaluationDomain<Fr>) -> Polynomial {
     let n = domain.size();
     let mut l1_e = vec![Fr::from(0); n];
@@ -446,6 +470,9 @@ pub(crate) fn l1_poly(domain: &GeneralEvaluationDomain<Fr>) -> Polynomial {
     Evaluations::from_vec_and_domain(l1_e, *domain).interpolate()
 }
 
+/// Computes the linearization polynomial for the proof generation.
+/// This function computes various terms involving the provided parameters and polynomials.
+#[allow(clippy::too_many_arguments)]
 fn compute_linearisation_polynomial(
     beta: &Fr,
     gamma: &Fr,
@@ -556,10 +583,10 @@ fn compute_linearisation_polynomial(
         tx_compact.mul(z_h_e)
     };
 
-    let r_x = line1 + line2 + (-line3) + line4 + (-line5);
-    r_x
+    line1 + line2 + (-line3) + line4 + (-line5)
 }
 
+/// Computes the commitments for round 1 of the proof generation process.
 fn commit_round1(
     ax: &Polynomial,
     bx: &Polynomial,
