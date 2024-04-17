@@ -40,7 +40,6 @@ impl Gate {
         }
     }
 
-
     pub(crate) fn new_mult_gate(
         a_pos: Position,
         b_pos: Position,

@@ -2,8 +2,8 @@ use std::fmt::{Debug, Display};
 use std::ops::{Add, Mul, Neg, Sub};
 
 use ark_bls12_381::{Bls12_381, Fr};
-use ark_ec::{AffineRepr, CurveGroup};
 use ark_ec::pairing::Pairing;
+use ark_ec::{AffineRepr, CurveGroup};
 use ark_poly::{DenseUVPolynomial, Polynomial};
 
 use crate::commitment::KzgCommitment;
@@ -40,10 +40,8 @@ impl KzgScheme {
         let g1_points = g1_points.into_iter();
         let point: G1Point = poly
             .zip(g1_points)
-            .map(|(cof, s)| {
-                s.mul(cof).into_affine()
-            })
-            .reduce(|acc, e| { acc.add(e).into_affine() })
+            .map(|(cof, s)| s.mul(cof).into_affine())
+            .reduce(|acc, e| acc.add(e).into_affine())
             .unwrap_or(G1Point::zero());
         point
     }

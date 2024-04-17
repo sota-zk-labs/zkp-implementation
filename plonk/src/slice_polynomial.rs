@@ -2,8 +2,8 @@ use std::ops::Mul;
 
 use ark_bls12_381::Fr;
 use ark_ff::{One, Zero};
-use ark_poly::{DenseUVPolynomial, Polynomial as Poly};
 use ark_poly::univariate::SparsePolynomial;
+use ark_poly::{DenseUVPolynomial, Polynomial as Poly};
 
 use kzg::commitment::KzgCommitment;
 use kzg::scheme::KzgScheme;
@@ -35,7 +35,10 @@ impl SlicePoly {
                 slices[index] = slice;
             });
 
-        Self { slices, degree: (tmp - 1) }
+        Self {
+            slices,
+            degree: (tmp - 1),
+        }
     }
 
     pub fn get_degree(&self) -> usize {
@@ -47,12 +50,17 @@ impl SlicePoly {
     }
 
     pub fn compact(&self, point: &Fr) -> Polynomial {
-        self.slices.iter().enumerate().map(|(index, slice)| {
-            let exponent = SparsePolynomial::from_coefficients_slice(&[(
-                (self.degree + 1) * index,
-                Fr::one(),
-            )]);
-            slice.mul(exponent.evaluate(point))
-        }).reduce(|one, other| one + other).unwrap()
+        self.slices
+            .iter()
+            .enumerate()
+            .map(|(index, slice)| {
+                let exponent = SparsePolynomial::from_coefficients_slice(&[(
+                    (self.degree + 1) * index,
+                    Fr::one(),
+                )]);
+                slice.mul(exponent.evaluate(point))
+            })
+            .reduce(|one, other| one + other)
+            .unwrap()
     }
 }

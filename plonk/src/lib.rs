@@ -1,9 +1,9 @@
-pub mod circuit;
-pub mod gate;
-pub mod constrain;
-pub mod prover;
 mod challenge;
-mod slice_polynomial;
-pub mod verifier;
-pub mod types;
+pub mod circuit;
 pub mod compiled_circuit;
+pub mod constrain;
+pub mod gate;
+pub mod prover;
+mod slice_polynomial;
+pub mod types;
+pub mod verifier;

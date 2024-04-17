@@ -12,8 +12,12 @@ pub struct CompiledCircuit {
 }
 
 impl CompiledCircuit {
-    pub fn new(gate_constraint: GateConstraints, copy_constraint: CopyConstraints,
-               srs: Srs, size: usize) -> Self {
+    pub fn new(
+        gate_constraint: GateConstraints,
+        copy_constraint: CopyConstraints,
+        srs: Srs,
+        size: usize,
+    ) -> Self {
         Self {
             gate_constraint,
             copy_constraint,

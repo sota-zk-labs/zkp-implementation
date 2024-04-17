@@ -36,7 +36,9 @@ mod tests {
 
         assert_eq!(
             commitment.0,
-            G1Point::generator().mul(poly.evaluate(&secret)).into_affine()
+            G1Point::generator()
+                .mul(poly.evaluate(&secret))
+                .into_affine()
         );
         let opening = scheme.open(poly, d);
         assert!(scheme.verify(&commitment, &opening, d));

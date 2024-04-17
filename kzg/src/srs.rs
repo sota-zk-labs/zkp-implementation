@@ -31,15 +31,22 @@ impl Srs {
 
         let g1_points = vec![Fr::one(); circuit_size + 3];
         let mut cur = Fr::one();
-        let g1_points = g1_points.into_iter().map(|_| {
-            let res = g1.mul(cur).into_affine();
-            cur *= secret;
-            res
-        }).collect::<Vec<_>>();
+        let g1_points = g1_points
+            .into_iter()
+            .map(|_| {
+                let res = g1.mul(cur).into_affine();
+                cur *= secret;
+                res
+            })
+            .collect::<Vec<_>>();
 
         let g2 = G2Point::generator();
         let g2s_point = g2.mul(secret).into();
-        Self { g1_points, g2, g2s_point }
+        Self {
+            g1_points,
+            g2,
+            g2s_point,
+        }
     }
 }
 

@@ -78,7 +78,6 @@ impl<'a, H: Digest> Write for HashMarshaller<'a, H> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::ops::Mul;
@@ -95,14 +94,17 @@ mod tests {
         let commitment1 = KzgCommitment(G1Point::generator().mul(Fr::from(1)).into_affine());
         let commitment2 = KzgCommitment(G1Point::generator().mul(Fr::from(2)).into_affine());
         let commitments1: [KzgCommitment; 2] = [commitment1.clone(), commitment2.clone()];
-        let [a, aa, aaa] = ChallengeGenerator::<Sha256>::from_commitment(&commitments1).generate_challenges();
+        let [a, aa, aaa] =
+            ChallengeGenerator::<Sha256>::from_commitment(&commitments1).generate_challenges();
 
         let commitments2: [KzgCommitment; 1] = [commitment2.clone()];
-        let [b] = ChallengeGenerator::<Sha256>::from_commitment(&commitments2).generate_challenges();
+        let [b] =
+            ChallengeGenerator::<Sha256>::from_commitment(&commitments2).generate_challenges();
         assert_ne!(a, b, "should be different");
 
         let commitments3: [KzgCommitment; 2] = [commitment1.clone(), commitment2.clone()];
-        let [c, cc, ccc] = ChallengeGenerator::<Sha256>::from_commitment(&commitments3).generate_challenges();
+        let [c, cc, ccc] =
+            ChallengeGenerator::<Sha256>::from_commitment(&commitments3).generate_challenges();
         assert_eq!(a, c, "should be equal");
         assert_eq!(aa, cc, "should be equal");
         assert_eq!(aaa, ccc, "should be equal");

@@ -1,5 +1,5 @@
-use std::{sync::Arc, usize, vec};
 use std::collections::HashMap;
+use std::{sync::Arc, usize, vec};
 
 use ark_bls12_381::Fr;
 use ark_ff::One;
@@ -20,7 +20,11 @@ impl Default for Circuit {
     fn default() -> Self {
         Self {
             gates: Vec::default(),
-            vals: vec![Arc::new(Vec::default()), Arc::new(Vec::default()), Arc::new(Vec::default())],
+            vals: vec![
+                Arc::new(Vec::default()),
+                Arc::new(Vec::default()),
+                Arc::new(Vec::default()),
+            ],
         }
     }
 }
@@ -49,7 +53,12 @@ impl Circuit {
         Arc::get_mut(&mut self.vals[1]).unwrap().push(b.2);
         Arc::get_mut(&mut self.vals[2]).unwrap().push(c.2);
 
-        let gate = Gate::new_add_gate(Position::Pos(a.0, a.1), Position::Pos(b.0, b.1), Position::Pos(c.0, c.1), Some(pi));
+        let gate = Gate::new_add_gate(
+            Position::Pos(a.0, a.1),
+            Position::Pos(b.0, b.1),
+            Position::Pos(c.0, c.1),
+            Some(pi),
+        );
         self.gates.push(gate);
         self
     }
@@ -65,7 +74,12 @@ impl Circuit {
         Arc::get_mut(&mut self.vals[1]).unwrap().push(b.2);
         Arc::get_mut(&mut self.vals[2]).unwrap().push(c.2);
 
-        let gate = Gate::new_mult_gate(Position::Pos(a.0, a.1), Position::Pos(b.0, b.1), Position::Pos(c.0, c.1), Some(pi));
+        let gate = Gate::new_mult_gate(
+            Position::Pos(a.0, a.1),
+            Position::Pos(b.0, b.1),
+            Position::Pos(c.0, c.1),
+            Some(pi),
+        );
         self.gates.push(gate);
         self
     }
@@ -81,7 +95,13 @@ impl Circuit {
         Arc::get_mut(&mut self.vals[1]).unwrap().push(b.2);
         Arc::get_mut(&mut self.vals[2]).unwrap().push(c.2);
 
-        let gate = Gate::new_constant_gate(Position::Pos(a.0, a.1), Position::Pos(b.0, b.1), Position::Pos(c.0, c.1), a.2, Some(pi));
+        let gate = Gate::new_constant_gate(
+            Position::Pos(a.0, a.1),
+            Position::Pos(b.0, b.1),
+            Position::Pos(c.0, c.1),
+            a.2,
+            Some(pi),
+        );
         self.gates.push(gate);
         self
     }
@@ -150,7 +170,9 @@ impl Circuit {
             }
 
             let map_element = |pos: &Position| {
-                let Position::Pos(i_1, i_2) = pos else { todo!() };
+                let Position::Pos(i_1, i_2) = pos else {
+                    todo!()
+                };
 
                 return if *i_1 == 0 {
                     roots[*i_2].clone()
@@ -170,13 +192,7 @@ impl Circuit {
         let s_sigma_2 = Evaluations::from_vec_and_domain(sigma_2, domain).interpolate();
         let s_sigma_3 = Evaluations::from_vec_and_domain(sigma_3, domain).interpolate();
 
-        CopyConstraints::new(
-            s_sigma_1,
-            s_sigma_2,
-            s_sigma_3,
-            k1,
-            k2,
-        )
+        CopyConstraints::new(s_sigma_1, s_sigma_2, s_sigma_3, k1, k2)
     }
 
     fn pad_circuit(mut self) -> Self {
@@ -199,24 +215,58 @@ impl Circuit {
         let srs = Srs::new(circuit_size);
         let assignment = self.get_assignment();
 
-        let interpolated_assignment = assignment.into_iter()
+        let interpolated_assignment = assignment
+            .into_iter()
             .map(|(k, v)| (k, Evaluations::from_vec_and_domain(v, domain).interpolate()))
             .collect::<HashMap<_, _>>();
 
         // check the computation of gate constraints
         let roots = domain.elements().collect::<Vec<_>>();
         let w = roots.get(0).unwrap();
-        let tmp = interpolated_assignment.get(Self::VEC_A).unwrap().evaluate(w)
-            * interpolated_assignment.get(Self::VEC_B).unwrap().evaluate(w)
-            * interpolated_assignment.get(Self::VEC_QM).unwrap().evaluate(w)
-            + interpolated_assignment.get(Self::VEC_A).unwrap().evaluate(w)
-            * interpolated_assignment.get(Self::VEC_QL).unwrap().evaluate(w)
-            + interpolated_assignment.get(Self::VEC_B).unwrap().evaluate(w)
-            * interpolated_assignment.get(Self::VEC_QR).unwrap().evaluate(w)
-            + interpolated_assignment.get(Self::VEC_QO).unwrap().evaluate(w)
-            * interpolated_assignment.get(Self::VEC_C).unwrap().evaluate(w)
-            + interpolated_assignment.get(Self::VEC_QC).unwrap().evaluate(w)
-            + interpolated_assignment.get(Self::VEC_PI).unwrap().evaluate(w);
+        let tmp = interpolated_assignment
+            .get(Self::VEC_A)
+            .unwrap()
+            .evaluate(w)
+            * interpolated_assignment
+                .get(Self::VEC_B)
+                .unwrap()
+                .evaluate(w)
+            * interpolated_assignment
+                .get(Self::VEC_QM)
+                .unwrap()
+                .evaluate(w)
+            + interpolated_assignment
+                .get(Self::VEC_A)
+                .unwrap()
+                .evaluate(w)
+                * interpolated_assignment
+                    .get(Self::VEC_QL)
+                    .unwrap()
+                    .evaluate(w)
+            + interpolated_assignment
+                .get(Self::VEC_B)
+                .unwrap()
+                .evaluate(w)
+                * interpolated_assignment
+                    .get(Self::VEC_QR)
+                    .unwrap()
+                    .evaluate(w)
+            + interpolated_assignment
+                .get(Self::VEC_QO)
+                .unwrap()
+                .evaluate(w)
+                * interpolated_assignment
+                    .get(Self::VEC_C)
+                    .unwrap()
+                    .evaluate(w)
+            + interpolated_assignment
+                .get(Self::VEC_QC)
+                .unwrap()
+                .evaluate(w)
+            + interpolated_assignment
+                .get(Self::VEC_PI)
+                .unwrap()
+                .evaluate(w);
         if tmp != Fr::from(0) {
             return Err("wrong in compute gate constraints".to_string());
         }
@@ -235,7 +285,12 @@ impl Circuit {
 
         let copy_constraints = self.cal_permutation();
 
-        Ok(CompiledCircuit::new(gate_constraints, copy_constraints, srs, circuit_size))
+        Ok(CompiledCircuit::new(
+            gate_constraints,
+            copy_constraints,
+            srs,
+            circuit_size,
+        ))
     }
 }
 
@@ -243,11 +298,30 @@ impl Circuit {
 #[test]
 fn create_circuit_test() {
     let circuit = Circuit::default()
-        .add_multiplication_gate((0, 0, Fr::from(1)), (0, 0, Fr::from(1)), (2, 0, Fr::from(1)), Fr::from(0))
-        .add_multiplication_gate((0, 0, Fr::from(1)), (1, 1, Fr::from(2)), (2, 1, Fr::from(2)), Fr::from(0))
-        .add_addition_gate((2, 1, Fr::from(2)), (1, 2, Fr::from(-3)), (2, 2, Fr::from(-1)), Fr::from(0))
-        .add_addition_gate((2, 0, Fr::from(1)), (2, 2, Fr::from(-1)), (2, 3, Fr::from(0)), Fr::from(0));
+        .add_multiplication_gate(
+            (0, 0, Fr::from(1)),
+            (0, 0, Fr::from(1)),
+            (2, 0, Fr::from(1)),
+            Fr::from(0),
+        )
+        .add_multiplication_gate(
+            (0, 0, Fr::from(1)),
+            (1, 1, Fr::from(2)),
+            (2, 1, Fr::from(2)),
+            Fr::from(0),
+        )
+        .add_addition_gate(
+            (2, 1, Fr::from(2)),
+            (1, 2, Fr::from(-3)),
+            (2, 2, Fr::from(-1)),
+            Fr::from(0),
+        )
+        .add_addition_gate(
+            (2, 0, Fr::from(1)),
+            (2, 2, Fr::from(-1)),
+            (2, 3, Fr::from(0)),
+            Fr::from(0),
+        );
 
     assert_eq!(circuit.vals[0][2], circuit.vals[2][1]);
 }
-
