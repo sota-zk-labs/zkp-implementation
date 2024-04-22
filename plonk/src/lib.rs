@@ -7,3 +7,4 @@ pub mod prover;
 mod slice_polynomial;
 pub mod types;
 pub mod verifier;
+pub mod parser;
