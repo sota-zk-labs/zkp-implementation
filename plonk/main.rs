@@ -113,15 +113,15 @@ fn gen_circuit_mul(mut circuit_list: Rc<RefCell<Vec<(String, String, String, i32
     circuit_list.borrow_mut().push((left.to_string(), right.to_string(), result.clone(), 1));
     let var_exist = variable_map.borrow_mut().get(left).is_some();
     if var_exist {
-        variable_map.borrow_mut().insert(left.to_string(), vec!(Pos(0, circuit_list.borrow_mut().len()-1)));
+        variable_map.borrow_mut().get_mut(left).expect("var_exist guaranty its existence").push(Pos(0, circuit_list.borrow_mut().len()-1));
     } else if left.len() == 1 {
-        variable_map.borrow_mut().get_mut(left).expect("var_exist guaranty its exist").push(Pos(0, circuit_list.borrow_mut().len()-1))
+        variable_map.borrow_mut().insert(left.to_string(), vec!(Pos(0, circuit_list.borrow_mut().len()-1)));
     }
     let var_exist = variable_map.borrow_mut().get(right).is_some();
     if var_exist {
-        variable_map.borrow_mut().insert(right.to_string(), vec!(Pos(0, circuit_list.borrow_mut().len()-1)));
+        variable_map.borrow_mut().get_mut(right).expect("var_exist guaranty its exist").push(Pos(0, circuit_list.borrow_mut().len()-1));
     } else if right.len() == 1 {
-        variable_map.borrow_mut().get_mut(right).expect("var_exist guaranty its exist").push(Pos(0, circuit_list.borrow_mut().len()-1))
+        variable_map.borrow_mut().insert(right.to_string(), vec!(Pos(0, circuit_list.borrow_mut().len()-1)));
     }
     let var_exist = variable_map.borrow_mut().get(&result).is_some();
     if var_exist {

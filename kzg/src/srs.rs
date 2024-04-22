@@ -10,7 +10,7 @@ use crate::types::{G1Point, G2Point};
 ///
 /// The `Srs` struct represents the structured reference string used in the KZG scheme,
 /// containing precomputed values necessary for commitment and verification.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Srs {
     /// Points in G1, each equals to generator point multiplied by the secret's powers.
     g1_points: Vec<G1Point>,

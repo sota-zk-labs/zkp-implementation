@@ -2,7 +2,7 @@ use crate::types::Polynomial;
 use ark_bls12_381::Fr;
 
 /// Represents gate constraints for a compiled circuit.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct GateConstraints {
     /// Polynomial representing the constraint function for the A wire.
     f_ax: Polynomial,
@@ -81,7 +81,7 @@ impl GateConstraints {
 }
 
 /// Represents copy constraints for a compiled circuit.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CopyConstraints {
     /// Polynomial representing the first prescribe function (sigma_1).
     s_sigma_1: Polynomial,

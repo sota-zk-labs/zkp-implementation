@@ -3,7 +3,7 @@ use kzg::srs::Srs;
 use crate::constraint::{CopyConstraints, GateConstraints};
 
 /// Represents a compiled circuit with gate and copy constraints, along with the structured reference string (SRS).
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CompiledCircuit {
     /// The size of the compiled circuit.
     pub size: usize,
