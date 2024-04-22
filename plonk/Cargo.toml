@@ -8,6 +8,10 @@ edition = "2021"
 name = "plonk-example"
 path = "examples/example.rs"
 
+[[example]]
+name = "test"
+path = "main.rs"
+
 
 [dependencies]
 ark-ff = "0.4.2"
