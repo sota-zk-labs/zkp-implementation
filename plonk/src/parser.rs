@@ -119,7 +119,7 @@ fn gen_circuit(map: Rc<RefCell<HashMap<String, Fr>>>, gate_list: Rc<RefCell<Vec<
 
     let mut left = {
         let split_list_mul:Vec<String> = split_list[0].split("*").map(|s| s.to_string()).collect();
-        let mut left_mul = Wire::new(split_list_mul[0].clone(), get_value_fr(map.clone(), split_list_mul[0].clone().trim().to_string()));
+        let mut left_mul = Wire::new(split_list_mul[0].clone(), get_value_fr(map.clone(), gate_list.clone(), variable_map.clone() , split_list_mul[0].clone().trim().to_string()));
         for j in 1..split_list_mul.len() {
             left_mul = gen_circuit_mul(map.clone(), gate_list.clone(), variable_map.clone(), left_mul, split_list_mul.get(j).cloned().expect("The for loop protect this from panic"));
         }
@@ -127,7 +127,7 @@ fn gen_circuit(map: Rc<RefCell<HashMap<String, Fr>>>, gate_list: Rc<RefCell<Vec<
     };
     for i in 1..split_list.len() {
         let split_list_mul:Vec<String> = split_list[i].split("*").map(|s| s.to_string()).collect();
-        let mut left_mul = Wire::new(split_list_mul[0].clone(), get_value_fr(map.clone(), split_list_mul[0].clone().trim().to_string()));
+        let mut left_mul = Wire::new(split_list_mul[0].clone(), get_value_fr(map.clone(), gate_list.clone(), variable_map.clone() , split_list_mul[0].clone().trim().to_string()));
         for j in 1..split_list_mul.len() {
             left_mul = gen_circuit_mul(map.clone(), gate_list.clone(), variable_map.clone(), left_mul, split_list_mul.get(j).expect("The for loop protect this from panic").clone());
         }
@@ -159,7 +159,7 @@ fn gen_circuit_add(map: Rc<RefCell<HashMap<String, Fr>>>, gate_list: Rc<RefCell<
 fn gen_circuit_mul(map: Rc<RefCell<HashMap<String, Fr>>>, gate_list: Rc<RefCell<Vec<Gate>>>,
                    variable_map: Rc<RefCell<HashMap<String, Vec<(usize, usize)>>>>, left: Wire, right: String) -> Wire {
     let left_string = left.clone().value_string;
-    let right = Wire::new(right.trim().to_string(), get_value_fr(map, right.to_string()));
+    let right = Wire::new(right.trim().to_string(), get_value_fr(map, gate_list.clone(), variable_map.clone() , right.to_string()));
     let result = format!("{}*{}", left_string, right.value_string);
     let result_fr = left.value_fr * right.value_fr;
     let result= Wire::new(result, result_fr);
@@ -170,13 +170,27 @@ fn gen_circuit_mul(map: Rc<RefCell<HashMap<String, Fr>>>, gate_list: Rc<RefCell<
     result
 }
 
-fn get_value_fr(map: Rc<RefCell<HashMap<String, Fr>>>, value: String) -> Fr {
+//Get the value in Fr for variable in String
+fn get_value_fr(map: Rc<RefCell<HashMap<String, Fr>>>, gate_list: Rc<RefCell<Vec<Gate>>>, variable_map: Rc<RefCell<HashMap<String, Vec<(usize, usize)>>>>, value: String) -> Fr {
     match map.borrow().get(&value) {
+        //Not a constant, search in map
         Some(value) => {value.clone()},
-        None => {Fr::from(value.parse::<i32>().unwrap())}
+        //Value is a constant insert a constant gate
+        None => {
+            let value_fr = Fr::from(value.parse::<i32>().unwrap());
+            let left = Wire::new(value.clone(), value_fr);
+            let right = Wire::new("0".to_string(), Fr::from(0));
+            let result = Wire::new(value.clone(), value_fr);
+            gate_list.borrow_mut().push(Gate::new(left.clone(), right.clone(), result.clone(), 2));
+            insert(gate_list.clone(), variable_map.clone(), left.value_string, 0);
+            insert(gate_list.clone(), variable_map.clone(), right.value_string, 1);
+            insert(gate_list.clone(), variable_map.clone(), result.value_string, 2);
+            value_fr
+        }
     }
 }
 
+//Insert a value into position map (variable_map) by checking if it exists in that map or no
 fn insert(gate_list: Rc<RefCell<Vec<Gate>>>, variable_map: Rc<RefCell<HashMap<String, Vec<(usize, usize)>>>>, value: String, position_in_circuit: usize) {
     let var_exist = variable_map.borrow_mut().get(&value).is_some();
     if var_exist {
@@ -196,7 +210,7 @@ mod tests {
     use crate::{prover, verifier};
 
     #[test]
-    fn parser_test() {
+    fn parser_test_prove() {
         let parser = Parser::default();
         let compiled_circuit = parser.parse("x*y+3*x*x+x*y*z".to_string());
 
