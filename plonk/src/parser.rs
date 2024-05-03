@@ -120,9 +120,9 @@ impl Parser {
         &self,
         circuit: String,
     ) -> (Vec<Gate>, HashMap<String, Vec<(usize, usize)>>) {
-        let gate_list: Vec<Gate> = Vec::new();
+        let mut gate_list: Vec<Gate> = Vec::new();
         //Map of integer key will be here, it will then be inserted into gen circuit method
-        let position_map: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
+        let mut position_map: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
 
         let split_list: Vec<String> = circuit.split("+").map(|s| s.to_string()).collect();
         //TODO:logic cleaning of the left_mul thingy or at least rename it
@@ -130,18 +130,15 @@ impl Parser {
             let split_list_mul: Vec<String> = split_list[0].split("*").map(|s| s.to_string()).collect();
             let mut left_mul = Wire::new(
                 split_list_mul[0].clone(),
-                get_witness_value(
-                    &self.witnesses,
-                    gate_list.clone(),
-                    position_map,
+                self.get_witness_value(
+                    &position_map,
                     split_list_mul[0].clone().trim().to_string(),
                 ),
             );
             for j in 1..split_list_mul.len() {
-                left_mul = gen_circuit_mul(
-                    &self.witnesses,
-                    gate_list.clone(),
-                    position_map,
+                left_mul = self.gen_circuit_mul(
+                    &mut gate_list,
+                    &mut position_map,
                     left_mul,
                     split_list_mul
                         .get(j)
@@ -155,18 +152,15 @@ impl Parser {
             let split_list_mul: Vec<String> = split_list[i].split("*").map(|s| s.to_string()).collect();
             let mut left_mul = Wire::new(
                 split_list_mul[0].clone(),
-                get_witness_value(
-                    &self.witnesses,
-                    gate_list.clone(),
-                    position_map,
+                self.get_witness_value(
+                    &position_map,
                     split_list_mul[0].clone().trim().to_string(),
                 ),
             );
             for j in 1..split_list_mul.len() {
-                left_mul = gen_circuit_mul(
-                    &self.witnesses,
-                    gate_list.clone(),
-                    position_map,
+                left_mul = self.gen_circuit_mul(
+                    &mut gate_list,
+                    &mut position_map,
                     left_mul,
                     split_list_mul
                         .get(j)
@@ -175,8 +169,7 @@ impl Parser {
                 );
             }
             //Left of the multiplication circuit now turn into the right of a addition circuit
-            left = gen_circuit_add(
-                &self.witnesses,
+            left = self.gen_circuit_add(
                 &mut gate_list,
                 &mut position_map,
                 left,
@@ -189,154 +182,158 @@ impl Parser {
         //first iteration we will have a vector of tuple of 3 value, (left, right, value, type (add, mul or const) )
         //second iteration we will input corresponding position into that value and insert it to the gate system
     }
-}
+
 
 //The copy constraint define copy values to each other, so in the end of the mul, we swap its value in the add circuit
 //we save the position of the result of gates and value of the variable
 
 
-fn gen_circuit_add(
-    &self,
-    gate_list: &mut Vec<Gate>,
-    position_map: &mut HashMap<String, Vec<(usize, usize)>>,
-    left: Wire,
-    right: Wire,
-) -> Wire {
-    let gate_number = gate_list.len() - 1;
-    let left_string = left.clone().value_string;
-    let right_string = right.clone().value_string;
-    let result = format!("{}+{}", left_string, right_string);
-    let result_fr = left.value_fr + right.value_fr;
-    let result = Wire::new(result, result_fr);
-    gate_list
-        .push(Gate::new(left, right, result.clone(), 0));
-    //TODO replace left.len() == 1 and right.len() == 1 with left.is_char() and right.is_char()
-    push_into_position_map_or_insert(
-        0,
-        gate_number,
-        position_map,
-        left_string.clone(),
-    );
-    push_into_position_map_or_insert(
-        1,
-        gate_number,
-        position_map,
-        left_string.clone(),
-    );
-    push_into_position_map_or_insert(
-        2,
-        gate_number,
-        position_map,
-        result.clone().value_string
-    );
-    result
-}
+    fn gen_circuit_add(
+        &self,
+        gate_list: &mut Vec<Gate>,
+        position_map: &mut HashMap<String, Vec<(usize, usize)>>,
+        left: Wire,
+        right: Wire,
+    ) -> Wire {
+        //TODO: do variable cleanup
+        let gate_number = gate_list.len();
+        let left_string = left.clone().value_string;
+        let right_string = right.clone().value_string;
+        let result = format!("{}+{}", left_string, right_string);
+        let result_fr = left.value_fr + right.value_fr;
+        let result = Wire::new(result, result_fr);
+        gate_list
+            .push(Gate::new(left, right, result.clone(), 0));
+        println!("{:?} {:?} {:?}", left, right, result);
+        Self::push_into_position_map_or_insert(
+            0,
+            gate_number,
+            position_map,
+            left_string.clone(),
+        );
+        Self::push_into_position_map_or_insert(
+            1,
+            gate_number,
+            position_map,
+            left_string.clone(),
+        );
+        Self::push_into_position_map_or_insert(
+            2,
+            gate_number,
+            position_map,
+            result.clone().value_string
+        );
+        result
+    }
 
-fn gen_circuit_mul(
-    map: &HashMap<String, Fr>,
-    gate_list: &mut Vec<Gate>,
-    position_map: &mut HashMap<String, Vec<(usize, usize)>>,
-    left: Wire,
-    right: String,
-) -> Wire {
-    let gate_number = gate_list.len() - 1;
-    //TODO: do variable cleanup
-    let left_string = left.clone().value_string;
-    let right = Wire::new(
-        right.trim().to_string(),
-        get_witness_value(
-            &position_map,
-            right
-        ),
-    );
-    let result = format!("{}*{}", left_string, right.value_string);
-    let result_fr = left.value_fr * right.value_fr;
-    let result = Wire::new(result, result_fr);
-    gate_list
-        .push(Gate::new(left, right.clone(), result.clone(), 1));
+    fn gen_circuit_mul(
+        &self,
+        gate_list: &mut Vec<Gate>,
+        position_map: &mut HashMap<String, Vec<(usize, usize)>>,
+        left: Wire,
+        right: String,
+    ) -> Wire {
+        let gate_number = gate_list.len();
+        //TODO: do variable cleanup
+        let left_string = left.clone().value_string;
+        let right = Wire::new(
+            right.trim().to_string(),
+            self.get_witness_value(
+                &position_map,
+                right
+            ),
+        );
+        let result = format!("{}*{}", left_string, right.value_string);
+        let result_fr = left.value_fr * right.value_fr;
+        let result = Wire::new(result, result_fr);
+        gate_list
+            .push(Gate::new(left, right.clone(), result.clone(), 1));
 
+        println!("{:?} {:?} {:?}", left, right, result);
 
-    push_into_position_map_or_insert(
-        0,
-        gate_number,
-        position_map,
-        left_string.clone(),
-    );
-    push_into_position_map_or_insert(
-        1,
-        gate_number,
-        position_map,
-        left_string.clone(),
-    );
-    push_into_position_map_or_insert(
-        2,
-        gate_number,
-        position_map,
-        result.clone().value_string
-    );
-    result
-}
+        Self::push_into_position_map_or_insert(
+            0,
+            gate_number,
+            position_map,
+            left_string.clone(),
+        );
+        Self::push_into_position_map_or_insert(
+            1,
+            gate_number,
+            position_map,
+            left_string.clone(),
+        );
+        Self::push_into_position_map_or_insert (
+            2,
+            gate_number,
+            position_map,
+            result.clone().value_string
+        );
+        result
+    }
 
-//Get the value in Fr for variable in String
-fn get_witness_value(
-    &self
-    position_map: &HashMap<String, Vec<(usize, usize)>>,
-    value: String,
-) -> Fr {
-    match self.witness.get(&value) {
-        //Not a constant, search in map
-        Some(value) => value.clone(),
-        //Value is a constant insert a constant gate
-        None => {
-            let value_fr = Fr::from(value.parse::<i32>().unwrap());
-            /* TODO: evaluate if constant gate was needed and move this block away
+    //Get the value in Fr for variable in String
+    fn get_witness_value(
+        &self,
+        position_map: &HashMap<String, Vec<(usize, usize)>>,
+        value: String,
+    ) -> Fr {
+        println!("{}", &value);
+        match self.witnesses.get(&value) {
+            //Not a constant, search in map
+            Some(value) => value.clone(),
+            //Value is a constant insert a constant gate
+            None => {
+                let value_fr = Fr::from(value.parse::<i32>().unwrap());
+                /* TODO: evaluate if constant gate was needed and move this block away
             let left = Wire::new(value.clone(), value_fr);
             let right = Wire::new("0".to_string(), Fr::from(0));
             let result = Wire::new(value.clone(), value_fr);
             gate_list
                 .push(Gate::new(left.clone(), right.clone(), result.clone(), 2));
-            push_into_position_map_or_insert(
+            Self::push_into_position_map_or_insert(
                 gate_list.clone(),
                 position_map,
                 left.value_string,
                 0,
             );
-            push_into_position_map_or_insert(
+            Self::push_into_position_map_or_insert(
                 gate_list.clone(),
                 position_map,
                 right.value_string,
                 1,
             );
-            push_into_position_map_or_insert(
+            Self::push_into_position_map_or_insert(
                 gate_list.clone(),
                 position_map,
                 result.value_string,
                 2,
             );*/
-            value_fr
+                value_fr
+            }
         }
     }
-}
 
-//Insert a value into position map (position_map) by checking if it exists in that map or not
-//TODO: it could have been try_insert() or something but i think it should be in a wrapper instead
-fn push_into_position_map_or_insert(
-    wire_number: usize,
-    gate_number: usize,
-    position_map: &mut HashMap<String, Vec<(usize, usize)>>,
-    value: String,
-) {
-    let var_exist = position_map.get(&value).is_some();
-    if var_exist {
-        position_map
-            .get_mut(&value)
-            .expect("var_exist guaranty its existence")
-            .push((wire_number, gate_number - 1))
-    } else {
-        position_map.insert(
-            value.clone(),
-            vec![(wire_number, gate_number - 1)],
-        );
+    //Insert a value into position map (position_map) by checking if it exists in that map or not
+    //TODO: it could have been try_insert() or something but i think it should be in a wrapper instead
+    fn push_into_position_map_or_insert(
+        wire_number: usize,
+        gate_number: usize,
+        position_map: &mut HashMap<String, Vec<(usize, usize)>>,
+        value: String,
+    ) {
+        let var_exist = position_map.get(&value).is_some();
+        if var_exist {
+            position_map
+                .get_mut(&value)
+                .expect("var_exist guaranty its existence")
+                .push((wire_number, gate_number))
+        } else {
+            position_map.insert(
+                value.clone(),
+                vec![(wire_number, gate_number)],
+            );
+        }
     }
 }
 
