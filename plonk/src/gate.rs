@@ -11,6 +11,7 @@ pub enum Position {
 }
 
 /// Struct representing a gate in the circuit.
+#[derive(PartialEq, Debug)]
 pub struct Gate {
     /// Position of the input wire A.
     a_pos: Position,

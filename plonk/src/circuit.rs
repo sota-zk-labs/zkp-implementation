@@ -12,6 +12,7 @@ use crate::constraint::{CopyConstraints, GateConstraints};
 use crate::gate::{Gate, Position};
 
 // Represents a circuit consisting of gates and values.
+#[derive(PartialEq, Debug)]
 pub struct Circuit {
     gates: Vec<Gate>,
     vals: Vec<Arc<Vec<Fr>>>,
