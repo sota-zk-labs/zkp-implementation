@@ -52,7 +52,7 @@ impl Parser {
         self.witnesses.insert(variable.to_string(), value);
     }
 
-    pub fn parse(self, input: String) -> Circuit {
+    pub fn parse(self, mut input: String) -> Circuit {
         // x^2 + y^2 = z^2 as a string
         // we check string.trim()[end-2..end] = "0" or not
         // we split by the "=" and then do array[0] + "-" + array[1] + " = 0"
@@ -67,7 +67,7 @@ impl Parser {
         //let polynomial = "x*x+y*y".to_lowercase().to_string();
 
         //in step 2 we need to separate addition firsts then add multiplication result in
-
+        input = Self::parse_string(input);
         // type 0: add, type 1: mul, type 2: const
         let (gate_list, mut position_map) = self.gen_circuit(input);
 
@@ -320,9 +320,31 @@ impl Parser {
     }
 
     fn parse_string(string: String) -> String {
-        let result = string.to_lowercase();
+        let string = string.to_lowercase();
+        let mut result = String::new();
+        let mut last_char = String::new();
+        let mut flag = false;
         for char in string.chars() {
-
+            if char.to_string() == " " {
+                continue
+            }
+            if char.to_string() == "^" {
+                flag = true;
+            } else if flag {
+                if char.is_numeric() {
+                    for _ in 0..char.to_string().parse::<i32>().unwrap()-1 {
+                        let string_to_add = "*".to_string() + &last_char;
+                        result += string_to_add.as_str();
+                    }
+                    flag = false;
+                } else {
+                    println!("this char bruh {} ", char);
+                    panic!("can't parse polynomial")
+                }
+            } else {
+                last_char = char.to_string();
+                result.push(char);
+            }
         }
         result
     }
@@ -330,7 +352,6 @@ impl Parser {
 
 //TODO: refactor each function got it own purpose
 //TODO: write test case that match the output of this program
-//TODO: implement parsing system to turn ^ into * * *
 //TODO: implement / and - operator
 //this was written with async compatibility in mind, so String was used instead of &str
 
@@ -421,5 +442,27 @@ mod tests {
         parser.add_witness("z", Fr::from(3));
 
         parser.parse("x*y+3*x*x+x*y*z*a".to_string());
+    }
+
+    #[test]
+    fn parser_negative_witness_test() {
+        let mut parser = Parser::default();
+        parser.add_witness("x", Fr::from(-1));
+        parser.add_witness("y", Fr::from(-2));
+        parser.add_witness("z", Fr::from(-3));
+
+        parser.parse("x*y+3*x*x+x*y*z".to_string());
+    }
+
+    #[test]
+    fn parse_string_test() {
+        let result = Parser::parse_string("x * y + 3 * x ^ 2 + x * y * z".to_string());
+        assert_eq!(result, "x*y+3*x*x+x*y*z".to_string());
+    }
+
+    #[test]
+    #[should_panic]
+    fn parse_string_panic_test() {
+        let result = Parser::parse_string("x * y + 3 * x ^ x + x * y * z".to_string());
     }
 }
