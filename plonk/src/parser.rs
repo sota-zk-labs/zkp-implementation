@@ -4,7 +4,6 @@ use std::ops::Neg;
 
 use crate::circuit::Circuit;
 
-
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 struct Gate {
     //Left branch of the circuit
@@ -257,7 +256,11 @@ impl Parser {
             //Value is a constant insert a constant gate
             None => Fr::from(value.parse::<i32>().unwrap()),
         };
-        if is_negative { result.neg() } else { result }
+        if is_negative {
+            result.neg()
+        } else {
+            result
+        }
     }
 
     //Insert a value into position map (position_map) by checking if it exists in that map or not
