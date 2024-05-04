@@ -451,7 +451,9 @@ mod tests {
         parser.add_witness("y", Fr::from(-2));
         parser.add_witness("z", Fr::from(-3));
 
-        parser.parse("x*y+3*x*x+x*y*z".to_string());
+        let compiled_circuit = parser.parse("x*y+3*x*x+x*y*z".to_string()).compile().unwrap();
+        let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
+        assert!(verifier::verify::<Sha256>(&compiled_circuit, proof).is_ok());
     }
 
     #[test]
