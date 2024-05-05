@@ -1,4 +1,5 @@
 use ark_bls12_381::Fr;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Neg;
 
@@ -111,64 +112,74 @@ impl Parser {
     }
 
     fn gen_circuit(&self, circuit: String) -> (Vec<Gate>, HashMap<String, Vec<(usize, usize)>>) {
-        let mut gate_list: Vec<Gate> = Vec::new();
-        let mut gate_set: HashSet<Gate> = HashSet::new();
+        let mut gate_list: RefCell<Vec<Gate>> = RefCell::new(Vec::new());
+        let mut gate_set: RefCell<HashSet<Gate>> = RefCell::new(HashSet::new());
         //Map of integer key will be here, it will then be inserted into gen circuit method
-        let mut position_map: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
+        let mut position_map: RefCell<HashMap<String, Vec<(usize, usize)>>> =
+            RefCell::new(HashMap::new());
 
         let split_list: Vec<String> = circuit.split('+').map(|s| s.to_string()).collect();
         //TODO:logic cleaning of the left_mul thingy or at least rename it
-        let mut left = {
-            let split_list_mul: Vec<String> =
-                split_list[0].split('*').map(|s| s.to_string()).collect();
-            let mut left_mul = Wire::new(
-                split_list_mul[0].clone(),
-                self.get_witness_value(split_list_mul[0].clone().trim().to_string()),
-            );
-            for j in 1..split_list_mul.len() {
-                left_mul = self.gen_mul_circuit(
-                    &mut gate_list,
-                    &mut gate_set,
-                    &mut position_map,
-                    left_mul,
-                    split_list_mul
-                        .get(j)
-                        .cloned()
-                        .expect("The for loop protect this from panic"),
-                );
-            }
-            left_mul
-        };
-        for i in 1..split_list.len() {
-            let split_list_mul: Vec<String> =
-                split_list[i].split('*').map(|s| s.to_string()).collect();
-            let mut left_mul = Wire::new(
-                split_list_mul[0].clone(),
-                self.get_witness_value(split_list_mul[0].clone().trim().to_string()),
-            );
-            for j in 1..split_list_mul.len() {
-                left_mul = self.gen_mul_circuit(
-                    &mut gate_list,
-                    &mut gate_set,
-                    &mut position_map,
-                    left_mul,
-                    split_list_mul
-                        .get(j)
-                        .expect("The for loop protect this from panic")
-                        .clone(),
-                );
-            }
-            //Left of the multiplication circuit now turn into the right of a addition circuit
-            left = self.gen_add_circuit(
-                &mut gate_list,
-                &mut gate_set,
-                &mut position_map,
-                left,
-                left_mul,
-            );
-        }
+        let _ = split_list
+            .into_iter()
+            .map(|split_list| {
+                split_list
+                    .split('*')
+                    .map(|s| s.trim().to_string())
+                    .map(|s| Wire::new(s.clone(), self.get_witness_value(s.clone().to_string())))
+                    .collect::<Vec<Wire>>()
+            })
+            .map(|multi_collections| {
+                let mut gate_list = gate_list.borrow_mut();
+                let mut gate_set = gate_set.borrow_mut();
+                let mut position_map = position_map.borrow_mut();
+                multi_collections
+                    .into_iter()
+                    .reduce(|left, right| {
+                        let gate_number = gate_list.len();
+                        let left_string = left.value_string.clone();
+                        let right_string = right.value_string.clone();
+                        let result_string = format!("{}*{}", left_string, right_string);
 
-        (gate_list, position_map)
+                        let result_fr = left.value_fr * right.value_fr;
+                        let result = Wire::new(result_string, result_fr);
+                        let gate = Gate::new(left, right.clone(), result.clone(), 1);
+                        if gate_set.get(&gate).is_some() {
+                            return result;
+                        }
+                        gate_list.push(gate.clone());
+                        gate_set.insert(gate);
+
+                        Self::push_into_position_map_or_insert(
+                            0,
+                            gate_number,
+                            &mut position_map,
+                            left_string.clone(),
+                        );
+                        Self::push_into_position_map_or_insert(
+                            1,
+                            gate_number,
+                            &mut position_map,
+                            right.value_string,
+                        );
+                        Self::push_into_position_map_or_insert(
+                            2,
+                            gate_number,
+                            &mut position_map,
+                            result.value_string.clone(),
+                        );
+                        result
+                    })
+                    .unwrap()
+            })
+            .reduce(|pre, cur| {
+                let mut gate_list = gate_list.borrow_mut();
+                let mut gate_set = gate_set.borrow_mut();
+                let mut position_map = position_map.borrow_mut();
+                self.gen_add_circuit(&mut gate_list, &mut gate_set, &mut position_map, pre, cur)
+            });
+
+        (gate_list.take(), position_map.take())
         //we will save a map of variable key to a stack of position, so all position is reversed
         //first iteration we will have a vector of tuple of 3 value, (left, right, value, type (add, mul or const) )
         //second iteration we will input corresponding position into that value and insert it to the gate system
@@ -201,39 +212,6 @@ impl Parser {
 
         Self::push_into_position_map_or_insert(0, gate_number, position_map, left_string.clone());
         Self::push_into_position_map_or_insert(1, gate_number, position_map, right_string);
-        Self::push_into_position_map_or_insert(
-            2,
-            gate_number,
-            position_map,
-            result.clone().value_string,
-        );
-        result
-    }
-
-    fn gen_mul_circuit(
-        &self,
-        gate_list: &mut Vec<Gate>,
-        gate_set: &mut HashSet<Gate>,
-        position_map: &mut HashMap<String, Vec<(usize, usize)>>,
-        left: Wire,
-        right: String,
-    ) -> Wire {
-        let gate_number = gate_list.len();
-        let left_string = left.clone().value_string;
-        let right = Wire::new(right.trim().to_string(), self.get_witness_value(right));
-        let result_string = format!("{}*{}", left_string, right.value_string);
-        let result_fr = left.value_fr * right.value_fr;
-        let result = Wire::new(result_string, result_fr);
-        let gate = Gate::new(left.clone(), right.clone(), result.clone(), 1);
-        //if this gate already exist, skip this move
-        if gate_set.get(&gate).is_some() {
-            return result;
-        }
-        gate_list.push(gate.clone());
-        gate_set.insert(gate);
-
-        Self::push_into_position_map_or_insert(0, gate_number, position_map, left_string.clone());
-        Self::push_into_position_map_or_insert(1, gate_number, position_map, right.value_string);
         Self::push_into_position_map_or_insert(
             2,
             gate_number,
