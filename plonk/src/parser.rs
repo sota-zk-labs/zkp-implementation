@@ -292,8 +292,8 @@ impl Parser {
 }
 
 //TODO: refactor each function got it own purpose
-//TODO: write test case that match the output of this program
 //TODO: implement / and - operator
+//TODO: delete println
 //this was written with async compatibility in mind, so String was used instead of &str
 
 #[cfg(test)]
