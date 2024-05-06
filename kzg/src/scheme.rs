@@ -1,9 +1,10 @@
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Mul, Neg, Sub};
 
-use ark_bls12_381::{Bls12_381, Fr};
+use ark_bls12_381::{Bls12_381, Fr, G1Projective};
 use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
+use ark_ff::{One, Zero};
 use ark_poly::{DenseUVPolynomial, Polynomial};
 
 use crate::commitment::KzgCommitment;
@@ -123,6 +124,31 @@ impl KzgScheme {
         let pairing1 = Bls12_381::pairing(opening.0, a);
         let pairing2 = Bls12_381::pairing(b, g2);
         pairing1 == pairing2
+    }
+
+    /// Aggregates multiple commitments into one commitment using a random challenge
+    /// 
+    /// # Arguments 
+    /// 
+    /// * `commitments`: The commitments to be aggregated
+    /// * `challenge`: The random challenge
+    /// 
+    /// # Returns
+    /// 
+    /// Aggregated commitment from input commitments
+    pub fn aggregate_commitments(
+        commitments: &Vec<&KzgCommitment>,
+        challenge: &Fr,
+    ) -> KzgCommitment {
+        let mut pow = Fr::one();
+        let mut result = G1Projective::zero();
+
+        for commitment in commitments {
+            result += &commitment.0.mul(pow);
+            pow *= challenge;
+        }
+
+        KzgCommitment(result.into_affine())
     }
 }
 

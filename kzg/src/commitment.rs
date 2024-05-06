@@ -19,6 +19,8 @@ mod tests {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::One;
     use ark_poly::{DenseUVPolynomial, Polynomial};
+    use rand::{Rng, SeedableRng};
+    use rand::rngs::StdRng;
 
     use crate::scheme::KzgScheme;
     use crate::srs::Srs;
@@ -57,12 +59,30 @@ mod tests {
     fn scalar_mul() {
         let srs = Srs::new(5);
         let scheme = KzgScheme::new(srs);
-        let coeffs = [1, 2, 3, 4, 5].map(|e| Fr::from(e));
+        let coeffs = [1, 2, 3, 4, 5].map(Fr::from);
         let poly = Poly::from_coefficients_slice(&coeffs);
         let commit1 = scheme.commit(&poly);
         let factor = Fr::from(9);
         let poly2 = poly.mul(factor);
         let commit2 = scheme.commit(&poly2);
         assert_eq!(commit1 * factor, commit2);
+    }
+    
+    #[test]
+    /// Tests the aggregation of commitments.
+    ///
+    /// This test validates the correctness of aggregating multiple commitments
+    /// by a random challenge
+    fn aggregate_commitments() {
+        let srs = Srs::new(5);
+        let scheme = KzgScheme::new(srs);
+        let f1 = Poly::from_coefficients_slice(&[1, 2, 3, 4, 5].map(Fr::from));
+        let f2 = Poly::from_coefficients_slice(&[1, 2, 3, 4, 8].map(Fr::from));
+        let c1 = scheme.commit(&f1);
+        let c2 = scheme.commit(&f2);
+        let challenge: u128 = StdRng::from_entropy().gen();
+        let challenge = Fr::from(challenge);
+        let batch = KzgScheme::aggregate_commitments(&vec![&c1, &c2], &challenge);
+        assert_eq!(batch.0, c1.0 + c2.0*challenge);
     }
 }
