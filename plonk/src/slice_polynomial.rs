@@ -19,8 +19,7 @@ pub(crate) struct SlicePoly {
 
 impl SlicePoly {
     /// Creates a new slice polynomial with the given polynomial and degree.
-    pub fn new(polynomial: Polynomial, degree: usize) -> Self {
-        assert!(polynomial.degree() <= 3 * degree + 5);
+    pub fn new(polynomial: Polynomial) -> Self {
         let coefficients = polynomial.coeffs;
 
         let mut tmp = coefficients.len() / 3;
@@ -36,10 +35,9 @@ impl SlicePoly {
             .for_each(|(index, slice)| {
                 slices[index] = slice;
             });
-
         Self {
             slices,
-            degree: (tmp - 1),
+            degree: tmp,
         }
     }
 
@@ -60,7 +58,7 @@ impl SlicePoly {
             .enumerate()
             .map(|(index, slice)| {
                 let exponent = SparsePolynomial::from_coefficients_slice(&[(
-                    (self.degree + 1) * index,
+                    self.degree * index,
                     Fr::one(),
                 )]);
                 slice.mul(exponent.evaluate(point))

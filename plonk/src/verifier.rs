@@ -38,10 +38,17 @@ pub fn verify<T: Digest + Default>(
     let domain = <GeneralEvaluationDomain<Fr>>::new(compiled_circuit.size).unwrap();
     let scheme = KzgScheme::new(compiled_circuit.srs());
     let w = domain.element(1);
+    eprintln!("w = {:?}", w);
+    eprintln!("w = {:?}", domain.element(0));
 
-    let z_h_e = evaluation_challenge.pow(&BigInt::new([domain.size() as u64])) - Fr::from(1);
-    let l_1_e =
-        z_h_e / (Fr::from(compiled_circuit.size as u128) * (evaluation_challenge - Fr::from(1)));
+    let z_h_e = evaluation_challenge.pow(BigInt::new([domain.size() as u64])) - Fr::from(1);
+
+    let l_1_e =        z_h_e * w / (Fr::from(compiled_circuit.size as u64) * (evaluation_challenge - w));
+
+    // let z_h_e = evaluation_challenge.pow(&BigInt::new([domain.size() as u64])) - Fr::from(1);
+    // let l_1_e =
+    //     z_h_e / (Fr::from(compiled_circuit.size as u128) * (evaluation_challenge - Fr::from(1)));
+    //
     let p_i_e = compiled_circuit
         .gate_constraints()
         .pi_x()
@@ -90,10 +97,10 @@ pub fn verify<T: Digest + Default>(
     let d_line4 = (proof.t_lo_commit
         + proof
             .t_mid_commit
-            .mul(evaluation_challenge.pow(&BigInt::new([proof.degree as u64 + 1])))
+            .mul(evaluation_challenge.pow(BigInt::new([proof.degree as u64])))
         + proof
             .t_hi_commit
-            .mul(evaluation_challenge.pow(&BigInt::new([proof.degree as u64 * 2 + 2]))))
+            .mul(evaluation_challenge.pow(BigInt::new([proof.degree as u64 * 2]))))
     .mul(z_h_e);
 
     let d = d_line1 + d_line2 - d_line3 - d_line4;
@@ -347,7 +354,7 @@ mod tests {
         let compile_circuit = circuit.compile().unwrap();
 
         let proof = generate_proof::<Sha256>(&compile_circuit);
-        assert!(verify::<Sha256>(&compile_circuit, proof).is_ok());
+        verify::<Sha256>(&compile_circuit, proof).unwrap();
     }
 
     #[test]

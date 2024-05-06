@@ -1,12 +1,14 @@
-use std::ops::{Add, Div, Mul};
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use ark_bls12_381::Fr;
-use ark_ff::{Field, UniformRand, Zero};
-use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial};
+use ark_ff::{Field, One, UniformRand, Zero};
 use ark_poly::{
     DenseUVPolynomial, EvaluationDomain, Evaluations, GeneralEvaluationDomain, Polynomial as Poly,
 };
+use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial};
 use digest::Digest;
+use rand::prelude::StdRng;
+use rand::SeedableRng;
 use sha2::Sha256;
 
 use kzg::commitment::KzgCommitment;
@@ -14,6 +16,7 @@ use kzg::scheme::KzgScheme;
 
 use crate::challenge::ChallengeGenerator;
 use crate::compiled_circuit::CompiledCircuit;
+use crate::polynomial::IntoPolynomialExt;
 use crate::slice_polynomial::SlicePoly;
 use crate::types::Polynomial;
 
@@ -55,15 +58,301 @@ pub struct Proof {
     pub degree: usize,
 }
 
-/// Generates a proof for the compiled circuit.
 pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -> Proof {
+    println!("Generating proof...");
+
+    let f_ax = compiled_circuit.gate_constraints().f_ax();
+    let f_bx = compiled_circuit.gate_constraints().f_bx();
+    let f_cx = compiled_circuit.gate_constraints().f_cx();
+    let k1 = compiled_circuit.copy_constraints().k1();
+    let k2 = compiled_circuit.copy_constraints().k2();
+    let s_sigma_1 = compiled_circuit.copy_constraints().get_s_sigma_1();
+    let s_sigma_2 = compiled_circuit.copy_constraints().get_s_sigma_2();
+    let s_sigma_3 = compiled_circuit.copy_constraints().get_s_sigma_3();
+    let q_mx = compiled_circuit.gate_constraints().q_mx();
+    let q_rx = compiled_circuit.gate_constraints().q_rx();
+    let q_o = compiled_circuit.gate_constraints().q_ox();
+    let q_lx = compiled_circuit.gate_constraints().q_lx();
+    let pi_x = compiled_circuit.gate_constraints().pi_x();
+    let q_cx = compiled_circuit.gate_constraints().q_cx();
+
+    // Round 1
+    let mut rng = StdRng::seed_from_u64(0);
+    let b1 = Fr::rand(&mut rng);
+    let b2 = Fr::rand(&mut rng);
+    let b3 = Fr::rand(&mut rng);
+    let b4 = Fr::rand(&mut rng);
+    let b5 = Fr::rand(&mut rng);
+    let b6 = Fr::rand(&mut rng);
+    let aa1 = Polynomial::from_coefficients_slice(&[b2, b1]);
+    let bb1 = Polynomial::from_coefficients_slice(&[b4, b3]);
+    let cc1 = Polynomial::from_coefficients_slice(&[b6, b5]);
+    let domain = GeneralEvaluationDomain::<Fr>::new(compiled_circuit.size).unwrap();
+    let ax = aa1.mul_by_vanishing_poly(domain) + f_ax.clone();
+    let bx = bb1.mul_by_vanishing_poly(domain) + f_bx.clone();
+    let cx = cc1.mul_by_vanishing_poly(domain) + f_cx.clone();
+
+    let kzg_scheme = KzgScheme::new(compiled_circuit.srs());
+    let a_commit = kzg_scheme.commit(&ax);
+    let b_commit = kzg_scheme.commit(&bx);
+    let c_commit = kzg_scheme.commit(&cx);
+
+    // Round 2
+    let mut challenge_generator = ChallengeGenerator::<T>::default();
+    challenge_generator.feed(&a_commit);
+    challenge_generator.feed(&b_commit);
+    challenge_generator.feed(&c_commit);
+
+    let [beta, gamma] = challenge_generator.generate_challenges();
+
+    let mut acc = Fr::from(1);
+    let mut accs = vec![acc];
+    let elements = domain.elements();
+    let _ = elements
+        .take(compiled_circuit.size - 1)
+        .map(|e| {
+            let w_j = f_ax.evaluate(&e);
+            let w_nj = f_bx.evaluate(&e);
+            let w_2nj = f_cx.evaluate(&e);
+
+            let numerator = (w_j + beta.mul(e) + gamma)
+                * (w_nj + beta.mul(e).mul(k1) + gamma)
+                * (w_2nj + beta.mul(e).mul(k2) + gamma);
+
+            let s1 = s_sigma_1.evaluate(&e);
+            let s2 = s_sigma_2.evaluate(&e);
+            let s3 = s_sigma_3.evaluate(&e);
+
+            let denominator = (w_j + s1 * beta + gamma)
+                * (w_nj + s2 * beta + gamma)
+                * (w_2nj + s3 * beta + gamma);
+            acc = acc * numerator / denominator;
+            accs.push(acc);
+        })
+        .collect::<Vec<_>>();
+
+    let mut accs_w = accs.clone();
+    accs_w.rotate_left(1);
+
+    let b7 = Fr::rand(&mut rng);
+    let b8 = Fr::rand(&mut rng);
+    let b9 = Fr::rand(&mut rng);
+    let zx1 = Polynomial::from_coefficients_slice(&[b9, b8, b7]);
+    let zxw1 =
+        Polynomial::from_coefficients_slice(&[b9, b8 * domain.element(1), b7 * domain.element(2)]);
+
+    let ww = Evaluations::from_vec_and_domain(accs_w, domain).interpolate();
+    let zxw = zxw1.mul_by_vanishing_poly(domain) + ww;
+
+    let w = Evaluations::from_vec_and_domain(accs, domain).interpolate();
+    let zx = zx1.mul_by_vanishing_poly(domain) + w;
+    let z_commit = kzg_scheme.commit(&zx);
+    challenge_generator.feed(&z_commit);
+
+    // Round 3
+    let [alpha] = challenge_generator.generate_challenges();
+    let f_multi = ax.mul(&bx).mul(q_mx);
+    let f_add = ax.mul(q_lx) + bx.clone().mul(q_rx) + cx.clone().mul(q_o);
+    let first_part = f_multi + f_add + pi_x.clone() + q_cx.clone();
+
+    let second_part = (ax.clone() + Polynomial::from_coefficients_vec(vec![gamma, beta]))
+        .mul(&(bx.clone() + Polynomial::from_coefficients_vec(vec![gamma, beta * k1])))
+        .mul(&(cx.clone() + Polynomial::from_coefficients_vec(vec![gamma, beta * k2])))
+        .mul(&zx);
+    let second_part_2 = (ax.clone() + s_sigma_1.mul(beta) + gamma.into_polynomial()).mul(
+        &(bx.clone() + s_sigma_2.mul(beta) + gamma.into_polynomial())
+            .mul(&(&cx + &s_sigma_3.mul(beta) + gamma.into_polynomial()))
+            .mul(&zxw),
+    );
+
+    let second_part = second_part.sub(&second_part_2);
+    let second_part = second_part.mul(alpha);
+
+    let l1x = Evaluations::from_vec_and_domain(vec![Fr::from(1)], domain).interpolate();
+    let third_part = (zx.clone() + Fr::from(-1).into_polynomial())
+        .mul(&l1x)
+        .mul(alpha.square());
+    let (tx, remaining) = (first_part + second_part + third_part)
+        .divide_by_vanishing_poly(domain)
+        .unwrap();
+
+    assert!(remaining.is_zero());
+    let slice_poly = SlicePoly::new(tx);
+    let [t_lo_commit, t_mid_commit, t_hi_commit] = slice_poly.commit(&kzg_scheme);
+    challenge_generator.feed(&t_lo_commit);
+    challenge_generator.feed(&t_mid_commit);
+    challenge_generator.feed(&t_hi_commit);
+
+    // Round 4
+    let [evaluation_challenge] = challenge_generator.generate_challenges();
+    let bar_a = ax.evaluate(&evaluation_challenge);
+    let bar_b = bx.evaluate(&evaluation_challenge);
+    let bar_c = cx.evaluate(&evaluation_challenge);
+    let bar_s_sigma_1 = s_sigma_1.evaluate(&evaluation_challenge);
+    let bar_s_sigma_2 = s_sigma_2.evaluate(&evaluation_challenge);
+    let bar_z_w = zxw.evaluate(&evaluation_challenge);
+
+    // Round 5
+    challenge_generator.feed(&kzg_scheme.commit_para(bar_a));
+    challenge_generator.feed(&kzg_scheme.commit_para(bar_b));
+    challenge_generator.feed(&kzg_scheme.commit_para(bar_c));
+    challenge_generator.feed(&kzg_scheme.commit_para(bar_s_sigma_1));
+    challenge_generator.feed(&kzg_scheme.commit_para(bar_s_sigma_2));
+    challenge_generator.feed(&kzg_scheme.commit_para(bar_z_w));
+
+    let [v] = challenge_generator.generate_challenges();
+
+    let rx_1 = q_mx.mul(bar_a * bar_b)
+        + q_lx.mul(bar_a)
+        + q_rx.mul(bar_b)
+        + q_o.mul(bar_c)
+        + pi_x.evaluate(&evaluation_challenge).into_polynomial()
+        + q_cx.clone();
+
+    let rx_2 = ((bar_a + beta * evaluation_challenge + gamma)
+        * (bar_b + beta * k1 * evaluation_challenge + gamma)
+        * (bar_c + beta * compiled_circuit.copy_constraints().k2() * evaluation_challenge + gamma))
+        .into_polynomial()
+        .mul(&zx);
+
+    let rx_3 = &s_sigma_3
+        .clone()
+        .mul(beta)
+        .add((bar_c + gamma).into_polynomial())
+        .mul(
+            (bar_a + beta * bar_s_sigma_1 + gamma)
+                * (bar_b + beta * bar_s_sigma_2 + gamma)
+                * bar_z_w,
+        );
+    let rx_23 = rx_2.sub(rx_3).mul(alpha);
+    let rx_4 = zx
+        .sub(&Fr::one().into_polynomial())
+        .mul(l1x.evaluate(&evaluation_challenge))
+        .mul(alpha.square());
+    let rx_5 = slice_poly.compact(&evaluation_challenge).mul(
+        &domain
+            .vanishing_polynomial()
+            .evaluate(&evaluation_challenge)
+            .into_polynomial(),
+    );
+
+    let rx = rx_1.add(rx_23).add(rx_4).sub(&rx_5);
+
+    let wx = (rx
+        + ax.sub(&bar_a.into_polynomial()).mul(v)
+        + bx.sub(&bar_b.into_polynomial()).mul(v.square())
+        + cx.sub(&bar_c.into_polynomial()).mul(v * v * v)
+        + s_sigma_1
+            .sub(&bar_s_sigma_1.into_polynomial())
+            .mul(v * v * v * v)
+        + s_sigma_2
+            .sub(&bar_s_sigma_2.into_polynomial())
+            .mul(v * v * v * v * v))
+    .div(&DensePolynomial::from_coefficients_vec(vec![
+        -evaluation_challenge,
+        Fr::from(1),
+    ]));
+    let w_ev_x_commit = kzg_scheme.commit(&wx);
+
+    let w_ew = &(zx + (-bar_z_w).into_polynomial())
+        / (&DensePolynomial::from_coefficients_vec(vec![
+            -evaluation_challenge * domain.element(1),
+            Fr::from(1),
+        ]));
+    let w_ev_wx_commit = kzg_scheme.commit(&w_ew);
+
+    challenge_generator.feed(&w_ev_x_commit);
+    challenge_generator.feed(&w_ev_wx_commit);
+    let [u] = challenge_generator.generate_challenges();
+
+    Proof {
+        a_commit,
+        b_commit,
+        c_commit,
+        z_commit,
+        t_lo_commit,
+        t_mid_commit,
+        t_hi_commit,
+        w_ev_x_commit,
+        w_ev_wx_commit,
+        bar_a,
+        bar_b,
+        bar_c,
+        bar_s_sigma_1,
+        bar_s_sigma_2,
+        bar_z_w,
+        u,
+        degree: slice_poly.get_degree(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::circuit::Circuit;
+
+    use super::*;
+
+    #[test]
+    fn test() {
+        // check x^2 + y^2 = z^2.
+        let compile_circuit = Circuit::default()
+            .add_multiplication_gate(
+                (1, 0, Fr::from(3)),
+                (0, 0, Fr::from(3)),
+                (0, 3, Fr::from(9)),
+                Fr::from(0),
+            )
+            .add_multiplication_gate(
+                (1, 1, Fr::from(4)),
+                (0, 1, Fr::from(4)),
+                (1, 3, Fr::from(16)),
+                Fr::from(0),
+            )
+            .add_multiplication_gate(
+                (1, 2, Fr::from(5)),
+                (0, 2, Fr::from(5)),
+                (2, 3, Fr::from(25)),
+                Fr::from(0),
+            )
+            .add_addition_gate(
+                (2, 0, Fr::from(9)),
+                (2, 1, Fr::from(16)),
+                (2, 2, Fr::from(25)),
+                Fr::from(0),
+            )
+            .compile()
+            .unwrap();
+
+        let proof = generate_proof::<Sha256>(&compile_circuit);
+        let proof2 = generate_proof2::<Sha256>(&compile_circuit);
+        assert_eq!(proof.a_commit, proof2.a_commit);
+        assert_eq!(proof.b_commit, proof2.b_commit);
+        assert_eq!(proof.c_commit, proof2.c_commit);
+        assert_eq!(proof.z_commit, proof2.z_commit);
+        assert_eq!(proof.t_lo_commit, proof2.t_lo_commit);
+        assert_eq!(proof.t_mid_commit, proof2.t_mid_commit);
+        assert_eq!(proof.t_hi_commit, proof2.t_hi_commit);
+        assert_eq!(proof.bar_a, proof2.bar_a);
+        assert_eq!(proof.bar_b, proof2.bar_b);
+        assert_eq!(proof.bar_c, proof2.bar_c);
+        assert_eq!(proof.bar_s_sigma_1, proof2.bar_s_sigma_1);
+        assert_eq!(proof.bar_s_sigma_2, proof2.bar_s_sigma_2);
+        assert_eq!(proof.bar_z_w, proof2.bar_z_w);
+        assert_eq!(proof.w_ev_x_commit, proof2.w_ev_x_commit);
+        assert_eq!(proof.w_ev_wx_commit, proof2.w_ev_wx_commit);
+        assert_eq!(proof.u, proof2.u);
+    }
+}
+
+/// Generates a proof for the compiled circuit.
+pub fn generate_proof2<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -> Proof {
     println!("Generating proof...");
 
     // Round 1
     #[cfg(test)]
     println!("ROUND 1");
 
-    let mut rng = rand::thread_rng();
+    let mut rng = StdRng::seed_from_u64(0);
     let scheme = KzgScheme::new(compiled_circuit.srs().clone());
     let domain = <GeneralEvaluationDomain<Fr>>::new(compiled_circuit.size).unwrap();
 
@@ -144,7 +433,7 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
         compiled_circuit,
     );
     // split t into 3 parts
-    let slice_poly = SlicePoly::new(tx, domain.size());
+    let slice_poly = SlicePoly::new(tx);
     let [t_lo_commit, t_mid_commit, t_hi_commit] = slice_poly.commit(&scheme);
 
     // round 4
@@ -207,7 +496,10 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
         &domain,
         compiled_circuit,
     );
+    eprintln!("r_x = {:?}", r_x);
+
     let bar_r = r_x.evaluate(&evaluation_challenge);
+    eprintln!("bar_r = {:?}", bar_r);
 
     let w_ev_x = poly_sub_para(&r_x, &bar_r)
         + poly_sub_para(&ax, &bar_a).mul(v)
@@ -223,6 +515,7 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
             &bar_s_sigma_2,
         )
         .mul(v * v * v * v * v);
+    eprintln!("w_ev_x = {:?}", w_ev_x);
 
     // check w_ev_x
     {
@@ -308,7 +601,6 @@ fn compute_acc(
     let roots = domain.elements().collect::<Vec<_>>();
     let k1 = compiled_circuit.copy_constraints().k1();
     let k2 = compiled_circuit.copy_constraints().k2();
-
     for i in 1..compiled_circuit.size {
         let w_i_sub1 = roots.get(i - 1).unwrap();
 
@@ -361,7 +653,6 @@ fn compute_acc(
                         .get_s_sigma_3()
                         .evaluate(w_i_sub1)
                 + *gamma);
-
         pre_acc_e = pre_acc_e * numerator / denominator;
         acc_e.push(pre_acc_e);
     }
@@ -396,7 +687,6 @@ fn compute_quotient_polynomial(
         + cx * compiled_circuit.gate_constraints().q_ox()
         + compiled_circuit.gate_constraints().pi_x().clone()
         + compiled_circuit.gate_constraints().q_cx().clone();
-
     // check line 1
     let quotient1 = divide_by_vanishing_poly(&line1, domain).expect("No remainder 1");
 
@@ -428,9 +718,8 @@ fn compute_quotient_polynomial(
                 .mul(*beta)
             + DensePolynomial::from_coefficients_vec(vec![*gamma])),
     )
-    .mul(z_wx)
-    .mul(alpha.clone());
-
+    .mul(z_wx);
+    let line3 = line3.mul(*alpha);
     let line23 = &line2 - &line3;
 
     // check line 23
@@ -442,7 +731,7 @@ fn compute_quotient_polynomial(
         zx2.coeffs[0] -= Fr::from(1);
         zx2.mul(&l1).mul(alpha.square())
     };
-
+    eprintln!("line4 = {:?}", line4);
     // check line 4
     let quotient4 = divide_by_vanishing_poly(&line4, domain).expect("No remainder here");
 
@@ -501,7 +790,6 @@ fn compute_linearisation_polynomial(
         + compiled_circuit.gate_constraints().q_ox().mul(*bar_c)
         + compiled_circuit.gate_constraints().q_cx().clone();
     line1.coeffs[0] += pi_e;
-
     let line2 = (*bar_a + *beta * eval_challenge + gamma)
         * (*bar_b + *beta * compiled_circuit.copy_constraints().k1() * eval_challenge + gamma)
         * (*bar_c + *beta * compiled_circuit.copy_constraints().k2() * eval_challenge + gamma)
@@ -512,6 +800,7 @@ fn compute_linearisation_polynomial(
         * (*bar_b + *beta * bar_s_sigma_2 + gamma)
         * bar_z_w
         * alpha;
+
     let mut tmp2 = compiled_circuit
         .copy_constraints()
         .get_s_sigma_3()
@@ -575,7 +864,6 @@ fn compute_linearisation_polynomial(
         zx2.coeffs[0] -= Fr::from(1);
         zx2.mul(l1_e).mul(alpha.square())
     };
-
     let line5 = {
         let z_h_e = domain.evaluate_vanishing_polynomial(*eval_challenge);
         tx_compact.mul(z_h_e)

@@ -223,8 +223,9 @@ impl Circuit {
         let circuit_size = self.gates.len();
         let domain = <GeneralEvaluationDomain<Fr>>::new(circuit_size).unwrap();
         let srs = Srs::new(circuit_size);
-        let assignment = self.get_assignment();
 
+        // check the computation of gate constraints
+        let assignment = self.get_assignment();
         let mut interpolated_assignment = assignment
             .into_iter()
             .map(|(k, v)| (k, Evaluations::from_vec_and_domain(v, domain).interpolate()))
