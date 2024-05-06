@@ -19,8 +19,8 @@ mod tests {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::One;
     use ark_poly::{DenseUVPolynomial, Polynomial};
-    use rand::{Rng, SeedableRng};
     use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
 
     use crate::scheme::KzgScheme;
     use crate::srs::Srs;
@@ -67,7 +67,7 @@ mod tests {
         let commit2 = scheme.commit(&poly2);
         assert_eq!(commit1 * factor, commit2);
     }
-    
+
     #[test]
     /// Tests the aggregation of commitments.
     ///
@@ -83,6 +83,6 @@ mod tests {
         let challenge: u128 = StdRng::from_entropy().gen();
         let challenge = Fr::from(challenge);
         let batch = KzgScheme::aggregate_commitments(&vec![&c1, &c2], &challenge);
-        assert_eq!(batch.0, c1.0 + c2.0*challenge);
+        assert_eq!(batch.0, c1.0 + c2.0 * challenge);
     }
 }

@@ -127,14 +127,14 @@ impl KzgScheme {
     }
 
     /// Aggregates multiple commitments into one commitment using a random challenge
-    /// 
-    /// # Arguments 
-    /// 
+    ///
+    /// # Arguments
+    ///
     /// * `commitments`: The commitments to be aggregated
     /// * `challenge`: The random challenge
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// Aggregated commitment from input commitments
     pub fn aggregate_commitments(
         commitments: &Vec<&KzgCommitment>,
