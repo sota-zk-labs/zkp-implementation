@@ -1,9 +1,16 @@
+use crate::circuit::Circuit;
 use ark_bls12_381::Fr;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Neg;
+use crate::parser::TypeOfCircuit::*;
 
-use crate::circuit::Circuit;
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+enum TypeOfCircuit {
+    Addition,
+    Multiplication,
+    Constant
+}
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 struct Gate {
@@ -14,17 +21,22 @@ struct Gate {
     //Bottom part (result) of the circuit
     pub bottom: Wire,
     // type 0: add, type 1: mul, type 2: const
-    pub type_of_circuit: i32,
+    pub type_of_circuit: TypeOfCircuit,
 }
 
 impl Gate {
-    fn new(left: Wire, right: Wire, bottom: Wire, type_of_circuit: i32) -> Self {
+    fn new(left: Wire, right: Wire, bottom: Wire, type_of_circuit: TypeOfCircuit) -> Self {
         Gate {
             left,
             right,
             bottom,
             type_of_circuit,
         }
+    }
+
+    /// Change the result value of this gate
+    pub fn change_result(&mut self, value: Fr) {
+        self.bottom.value_fr = value
     }
 }
 
@@ -53,28 +65,111 @@ impl Parser {
         self.witnesses.insert(variable.to_string(), value);
     }
 
-    pub fn parse(self, mut input: String) -> Circuit {
-        // x^2 + y^2 = z^2 as a string
-        // we check string.trim()[end-2..end] = "0" or not
-        // we split by the "=" and then do array[0] + "-" + array[1] + " = 0"
-        // x^2 + y^2 - z^2 = 0
-        //use a parse system to convert it into
-        // x*x + y*y - z*z = 0
-        //first count unique variable, in this case 3: "x", "y", "z"
-        //ask the value of the variable
-        //secondly use recursion to build circuit
-        //save value in a vec<vec<>>
-        //It could be "x*x+y*y-z*z = 0
-        //let polynomial = "x*x+y*y".to_lowercase().to_string();
-
+    pub fn parse(self, input: &str) -> Circuit {
         //in step 2 we need to separate addition firsts then add multiplication result in
-        input = Self::parse_string(input);
-        // type 0: add, type 1: mul, type 2: const
-        let (gate_list, mut position_map) = self.gen_circuit(input);
+        let input = Self::parse_string(input);
+        let input = &input;
 
+        //Step 1: prepare gate_list and position_map prior to coordinate pair accumulator
+        let (gate_list, position_map) = self.prepare_gen_circuit(input);
+
+        //Step 2: generate the actual circuit with coordinate pair accumulator for copy constraint
+        Self::gen_circuit(gate_list, position_map)
+    }
+
+    fn prepare_gen_circuit(&self, string: &str) -> (Vec<Gate>, HashMap<String, Vec<(usize, usize)>>) {
+        let gate_list: RefCell<Vec<Gate>> = RefCell::new(Vec::new());
+        let gate_set: RefCell<HashSet<Gate>> = RefCell::new(HashSet::new());
+        //Map of integer key will be here, it will then be inserted into gen circuit method
+        let position_map: RefCell<HashMap<String, Vec<(usize, usize)>>> =
+            RefCell::new(HashMap::new());
+
+        let result = string
+            .split('=')
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
+        assert_eq!(result.len(), 2);
+        let string = result[0].clone();
+        let result = result[1].clone();
+
+        let mut split_list: Vec<String> = string.split('+').map(|s| s.to_string()).collect();
+        split_list.push("-".to_string() + result.as_str());
+        split_list
+            .into_iter()
+            .map(|split_list| {
+                split_list
+                    .split('*')
+                    .map(|s| s.trim().to_string())
+                    .map(|s| Wire::new(s.clone(), self.get_witness_value(&s)))
+                    .collect::<Vec<Wire>>()
+            })
+            .map(|multi_collections| {
+                let mut gate_list = gate_list.borrow_mut();
+                let mut gate_set = gate_set.borrow_mut();
+                let mut position_map = position_map.borrow_mut();
+                multi_collections
+                    .into_iter()
+                    .reduce(|left, right| {
+                        let gate_number = gate_list.len();
+                        let result = Wire::new(
+                            format!("{}*{}", &left.value_string, &right.value_string),
+                            left.value_fr * right.value_fr
+                        );
+                        let gate = Gate::new(left.clone(), right.clone(), result.clone(), Multiplication);
+                        if gate_set.get(&gate).is_some() {
+                            return result;
+                        }
+                        gate_list.push(gate.clone());
+                        gate_set.insert(gate);
+
+                        Self::push_into_position_map_or_insert(
+                            0,
+                            gate_number,
+                            &mut position_map,
+                            &left.value_string,
+                        );
+                        Self::push_into_position_map_or_insert(
+                            1,
+                            gate_number,
+                            &mut position_map,
+                            &right.value_string,
+                        );
+                        Self::push_into_position_map_or_insert(
+                            2,
+                            gate_number,
+                            &mut position_map,
+                            &result.value_string,
+                        );
+                        result
+                    })
+                    .unwrap()
+            })
+            .reduce(|pre, cur| {
+                let mut gate_list = gate_list.borrow_mut();
+                let mut gate_set = gate_set.borrow_mut();
+                let mut position_map = position_map.borrow_mut();
+                self.gen_add_circuit(&mut gate_list, &mut gate_set, &mut position_map, pre, cur)
+            });
+
+        gate_list
+            .borrow_mut()
+            .last_mut()
+            .unwrap()
+            .change_result(Fr::from(0));
+
+        (gate_list.take(), position_map.take())
+        //we will save a map of variable key to a stack of position, so all position is reversed
+        //first iteration we will have a vector of tuple of 3 value, (left, right, value, type (add, mul or const) )
+        //second iteration we will input corresponding position into that value and insert it to the gate system
+    }
+
+    fn gen_circuit(
+        gate_list: Vec<Gate>,
+        mut position_map: HashMap<String, Vec<(usize, usize)>>
+    ) -> Circuit {
         let mut result = Circuit::default();
-        println!("{:?}", position_map);
-        for gate in gate_list.iter().cloned() {
+        for gate in gate_list.iter() {
+            #[cfg(test)]
             println!("{:?}", gate);
             let left = position_map
                 .get_mut(&gate.left.value_string)
@@ -95,98 +190,21 @@ impl Parser {
                 .unwrap();
             let bottom = (bottom.0, bottom.1, Fr::from(gate.bottom.value_fr));
             match gate.type_of_circuit {
-                0 => {
+                Addition => {
                     result = result.add_addition_gate(left, right, bottom, Fr::from(0));
                 }
-                1 => {
+                Multiplication => {
                     result = result.add_multiplication_gate(left, right, bottom, Fr::from(0));
                 }
-                2 => {
+                Constant => {
                     result = result.add_constant_gate(left, right, bottom, Fr::from(0));
-                }
-                _ => {}
+                },
             }
+            #[cfg(test)]
             println!("{:?} {:?} {:?}", left, right, bottom);
         }
         result
     }
-
-    fn gen_circuit(&self, circuit: String) -> (Vec<Gate>, HashMap<String, Vec<(usize, usize)>>) {
-        let mut gate_list: RefCell<Vec<Gate>> = RefCell::new(Vec::new());
-        let mut gate_set: RefCell<HashSet<Gate>> = RefCell::new(HashSet::new());
-        //Map of integer key will be here, it will then be inserted into gen circuit method
-        let mut position_map: RefCell<HashMap<String, Vec<(usize, usize)>>> =
-            RefCell::new(HashMap::new());
-
-        let split_list: Vec<String> = circuit.split('+').map(|s| s.to_string()).collect();
-        //TODO:logic cleaning of the left_mul thingy or at least rename it
-        let _ = split_list
-            .into_iter()
-            .map(|split_list| {
-                split_list
-                    .split('*')
-                    .map(|s| s.trim().to_string())
-                    .map(|s| Wire::new(s.clone(), self.get_witness_value(s.clone().to_string())))
-                    .collect::<Vec<Wire>>()
-            })
-            .map(|multi_collections| {
-                let mut gate_list = gate_list.borrow_mut();
-                let mut gate_set = gate_set.borrow_mut();
-                let mut position_map = position_map.borrow_mut();
-                multi_collections
-                    .into_iter()
-                    .reduce(|left, right| {
-                        let gate_number = gate_list.len();
-                        let left_string = left.value_string.clone();
-                        let right_string = right.value_string.clone();
-                        let result_string = format!("{}*{}", left_string, right_string);
-
-                        let result_fr = left.value_fr * right.value_fr;
-                        let result = Wire::new(result_string, result_fr);
-                        let gate = Gate::new(left, right.clone(), result.clone(), 1);
-                        if gate_set.get(&gate).is_some() {
-                            return result;
-                        }
-                        gate_list.push(gate.clone());
-                        gate_set.insert(gate);
-
-                        Self::push_into_position_map_or_insert(
-                            0,
-                            gate_number,
-                            &mut position_map,
-                            left_string.clone(),
-                        );
-                        Self::push_into_position_map_or_insert(
-                            1,
-                            gate_number,
-                            &mut position_map,
-                            right.value_string,
-                        );
-                        Self::push_into_position_map_or_insert(
-                            2,
-                            gate_number,
-                            &mut position_map,
-                            result.value_string.clone(),
-                        );
-                        result
-                    })
-                    .unwrap()
-            })
-            .reduce(|pre, cur| {
-                let mut gate_list = gate_list.borrow_mut();
-                let mut gate_set = gate_set.borrow_mut();
-                let mut position_map = position_map.borrow_mut();
-                self.gen_add_circuit(&mut gate_list, &mut gate_set, &mut position_map, pre, cur)
-            });
-
-        (gate_list.take(), position_map.take())
-        //we will save a map of variable key to a stack of position, so all position is reversed
-        //first iteration we will have a vector of tuple of 3 value, (left, right, value, type (add, mul or const) )
-        //second iteration we will input corresponding position into that value and insert it to the gate system
-    }
-
-    //The copy constraint define copy values to each other, so in the end of the mul, we swap its value in the add circuit
-    //we save the position of the result of gates and value of the variable
 
     fn gen_add_circuit(
         &self,
@@ -197,12 +215,11 @@ impl Parser {
         right: Wire,
     ) -> Wire {
         let gate_number = gate_list.len();
-        let left_string = left.clone().value_string;
-        let right_string = right.clone().value_string;
-        let result = format!("{}+{}", left_string, right_string);
-        let result_fr = left.value_fr + right.value_fr;
-        let result = Wire::new(result, result_fr);
-        let gate = Gate::new(left.clone(), right.clone(), result.clone(), 0);
+        let result = Wire::new(
+            format!("{}+{}", &left.value_string, &right.value_string),
+            left.value_fr + right.value_fr,
+        );
+        let gate = Gate::new(left.clone(), right.clone(), result.clone(), Addition);
         //if this gate already exist, skip this move
         if gate_set.get(&gate).is_some() {
             return result;
@@ -210,25 +227,25 @@ impl Parser {
         gate_list.push(gate.clone());
         gate_set.insert(gate);
 
-        Self::push_into_position_map_or_insert(0, gate_number, position_map, left_string.clone());
-        Self::push_into_position_map_or_insert(1, gate_number, position_map, right_string);
+        Self::push_into_position_map_or_insert(0, gate_number, position_map, &left.value_string);
+        Self::push_into_position_map_or_insert(1, gate_number, position_map, &right.value_string);
         Self::push_into_position_map_or_insert(
             2,
             gate_number,
             position_map,
-            result.clone().value_string,
+            &result.value_string,
         );
         result
     }
 
     //Get the value in Fr for variable in String
-    fn get_witness_value(&self, mut value: String) -> Fr {
+    fn get_witness_value(&self, mut value: &str) -> Fr {
         let mut is_negative = false;
         if &value[..1] == "-" {
             is_negative = true;
-            value = value[1..].to_string();
+            value = &value[1..];
         }
-        let result = match self.witnesses.get(&value) {
+        let result = match self.witnesses.get(value) {
             //Not a constant, search in map
             Some(value) => *value,
             //Value is a constant insert a constant gate
@@ -241,49 +258,54 @@ impl Parser {
         }
     }
 
-    //Insert a value into position map (position_map) by checking if it exists in that map or not
+    /// Insert a pair of (x, y) corresponding to [wire_number] and [gate_number] into [position_map] by checking if it exists in the map or not
     //TODO: it could have been try_insert() or something but i think it should be in a wrapper instead
     fn push_into_position_map_or_insert(
         wire_number: usize,
         gate_number: usize,
         position_map: &mut HashMap<String, Vec<(usize, usize)>>,
-        value: String,
+        value: &str,
     ) {
-        let var_exist = position_map.get(&value).is_some();
+        let var_exist = position_map.get(value).is_some();
         if var_exist {
             position_map
-                .get_mut(&value)
+                .get_mut(value)
                 .expect("var_exist guaranty its existence")
                 .push((wire_number, gate_number))
         } else {
-            position_map.insert(value.clone(), vec![(wire_number, gate_number)]);
+            position_map.insert(value.to_string(), vec![(wire_number, gate_number)]);
         }
     }
 
-    fn parse_string(string: String) -> String {
+    /// Parse a polynomial string to be compatible with parser
+    ///
+    /// Feature:
+    /// - Lower case
+    /// - Expand ^ into *
+    /// - Delete space character " "
+    fn parse_string(string: &str) -> String {
         let string = string.to_lowercase();
         let mut result = String::new();
-        let mut last_char = String::new();
+        let mut last_char = ' ';
         let mut flag = false;
         for char in string.chars() {
-            if char.to_string() == " " {
+            if char == ' ' {
                 continue;
             }
-            if char.to_string() == "^" {
+            if char == '^' {
                 flag = true;
             } else if flag {
                 if char.is_numeric() {
                     for _ in 0..char.to_string().parse::<i32>().unwrap() - 1 {
-                        let string_to_add = "*".to_string() + &last_char;
-                        result += string_to_add.as_str();
+                        result.push('*');
+                        result.push(last_char);
                     }
                     flag = false;
                 } else {
-                    println!("this char bruh {} ", char);
                     panic!("can't parse polynomial")
                 }
             } else {
-                last_char = char.to_string();
+                last_char = char;
                 result.push(char);
             }
         }
@@ -291,20 +313,17 @@ impl Parser {
     }
 }
 
-//TODO: refactor each function got it own purpose
-//TODO: implement / and - operator
-//TODO: delete println
-//this was written with async compatibility in mind, so String was used instead of &str
+//TODO: implement / operator
 
 #[cfg(test)]
 mod tests {
-    use ark_bls12_381::Fr;
-    use sha2::Sha256;
-
     use crate::circuit::Circuit;
     use crate::parser::Parser;
     use crate::{prover, verifier};
+    use ark_bls12_381::Fr;
+    use sha2::Sha256;
 
+    /// Test generated circuit with prover
     #[test]
     fn parser_prover_test() {
         let mut parser = Parser::default();
@@ -312,24 +331,23 @@ mod tests {
         parser.add_witness("y", Fr::from(2));
         parser.add_witness("z", Fr::from(3));
         let compiled_circuit = parser
-            .parse("x*y+3*x*x+x*y*z".to_string())
+            .parse("x*y+3*x*x+x*y*z=11")
             .compile()
             .unwrap();
 
-        // generate proof
         let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
 
-        // verify proof
         assert!(verifier::verify::<Sha256>(&compiled_circuit, proof).is_ok());
     }
 
+    /// Test generated circuit with expected circuit
     #[test]
     fn parser_circuit_test() {
         let mut parser = Parser::default();
         parser.add_witness("x", Fr::from(1));
         parser.add_witness("y", Fr::from(2));
         parser.add_witness("z", Fr::from(3));
-        let generated_circuit = parser.parse("x*y+3*x*x+x*y*z".to_string());
+        let generated_circuit = parser.parse("x*y+3*x*x+x*y*z=11");
 
         let hand_written_circuit = Circuit::default()
             .add_multiplication_gate(
@@ -371,18 +389,28 @@ mod tests {
                 //gate 5
                 (2, 3, Fr::from(5)),
                 (2, 4, Fr::from(6)),
+                (0, 6, Fr::from(11)),
+                Fr::from(0),
+            )
+            .add_addition_gate(
+                //gate 6
                 (2, 5, Fr::from(11)),
+                (1, 6, Fr::from(-11)),
+                (2, 6, Fr::from(0)),
                 Fr::from(0),
             );
 
+        //Verify if generated circuit is equal to handwritten circuit
         assert_eq!(hand_written_circuit, generated_circuit);
         let compiled_circuit = hand_written_circuit.compile().unwrap();
         //Verify if the handwritten circuit is true
         let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
         assert!(verifier::verify::<Sha256>(&compiled_circuit, proof).is_ok());
-        //Verify if generated circuit is equal to handwritten circuit
     }
 
+    ///Test with a missing witness
+    ///
+    /// Must panic
     #[should_panic]
     #[test]
     fn parser_missing_witness_test() {
@@ -391,9 +419,10 @@ mod tests {
         parser.add_witness("y", Fr::from(2));
         parser.add_witness("z", Fr::from(3));
 
-        parser.parse("x*y+3*x*x+x*y*z*a".to_string());
+        parser.parse("x*y+3*x*x+x*y*z*a=0");
     }
 
+    /// Test with negative variable
     #[test]
     fn parser_negative_witness_test() {
         let mut parser = Parser::default();
@@ -402,22 +431,26 @@ mod tests {
         parser.add_witness("z", Fr::from(-3));
 
         let compiled_circuit = parser
-            .parse("x*y+3*x*x+x*y*z".to_string())
+            .parse("x*y+3*x*x+x*y*z=-1")
             .compile()
             .unwrap();
         let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
         assert!(verifier::verify::<Sha256>(&compiled_circuit, proof).is_ok());
     }
 
+    /// Test parse_string() function
     #[test]
     fn parse_string_test() {
-        let result = Parser::parse_string("x * y + 3 * x ^ 2 + x * y * z".to_string());
-        assert_eq!(result, "x*y+3*x*x+x*y*z".to_string());
+        let result = Parser::parse_string("x * y + 3 * x ^ 2 + x * y * z = 11");
+        assert_eq!(result, "x*y+3*x*x+x*y*z=11".to_string());
     }
 
+    /// Test parse_string() function with invalid polynomial string
+    ///
+    /// Must panic
     #[test]
     #[should_panic]
     fn parse_string_panic_test() {
-        let result = Parser::parse_string("x * y + 3 * x ^ x + x * y * z".to_string());
+        let _result = Parser::parse_string("x * y + 3 * x ^ x + x * y * z=0");
     }
 }
