@@ -1,15 +1,15 @@
 use crate::circuit::Circuit;
+use crate::parser::TypeOfCircuit::*;
 use ark_bls12_381::Fr;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Neg;
-use crate::parser::TypeOfCircuit::*;
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 enum TypeOfCircuit {
     Addition,
     Multiplication,
-    Constant
+    Constant,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -55,18 +55,51 @@ impl Wire {
     }
 }
 
+/// String to circuit parser
+///
+/// See parse function for usage
 #[derive(Default)]
 pub struct Parser {
     pub witnesses: HashMap<String, Fr>,
 }
 
 impl Parser {
+    /// Add witness for the polynomial string
+    ///
+    /// ```
+    /// use ark_bls12_381::Fr;
+    /// use plonk::parser::Parser;
+    ///
+    /// let mut parser = Parser::default();
+    /// parser.add_witness("x", Fr::from(1));
+    ///
+    /// parser.parse("x=1");
+    /// ```
     pub fn add_witness(&mut self, variable: &str, value: Fr) {
         self.witnesses.insert(variable.to_string(), value);
     }
 
+    /// Parse string into circuit
+    ///
+    /// ```
+    /// use ark_bls12_381::Fr;
+    /// use sha2::Sha256;
+    /// use plonk::parser::Parser;
+    /// use plonk::{prover, verifier};
+    /// let mut parser = Parser::default();
+    /// parser.add_witness("x", Fr::from(1));
+    /// parser.add_witness("y", Fr::from(2));
+    /// parser.add_witness("z", Fr::from(3));
+    /// let compiled_circuit = parser
+    ///     .parse("x*y+3*x*x+x*y*z=11")
+    ///     .compile()
+    ///     .unwrap();
+    ///
+    /// let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
+    ///
+    /// assert!(verifier::verify::<Sha256>(&compiled_circuit, proof).is_ok());
+    /// ```
     pub fn parse(self, input: &str) -> Circuit {
-        //in step 2 we need to separate addition firsts then add multiplication result in
         let input = Self::parse_string(input);
         let input = &input;
 
@@ -77,7 +110,11 @@ impl Parser {
         Self::gen_circuit(gate_list, position_map)
     }
 
-    fn prepare_gen_circuit(&self, string: &str) -> (Vec<Gate>, HashMap<String, Vec<(usize, usize)>>) {
+    /// Generate [gate_list] and [position_map] to prepare for coordinate pair accumulator
+    fn prepare_gen_circuit(
+        &self,
+        string: &str,
+    ) -> (Vec<Gate>, HashMap<String, Vec<(usize, usize)>>) {
         let gate_list: RefCell<Vec<Gate>> = RefCell::new(Vec::new());
         let gate_set: RefCell<HashSet<Gate>> = RefCell::new(HashSet::new());
         //Map of integer key will be here, it will then be inserted into gen circuit method
@@ -113,9 +150,10 @@ impl Parser {
                         let gate_number = gate_list.len();
                         let result = Wire::new(
                             format!("{}*{}", &left.value_string, &right.value_string),
-                            left.value_fr * right.value_fr
+                            left.value_fr * right.value_fr,
                         );
-                        let gate = Gate::new(left.clone(), right.clone(), result.clone(), Multiplication);
+                        let gate =
+                            Gate::new(left.clone(), right.clone(), result.clone(), Multiplication);
                         if gate_set.get(&gate).is_some() {
                             return result;
                         }
@@ -148,7 +186,13 @@ impl Parser {
                 let mut gate_list = gate_list.borrow_mut();
                 let mut gate_set = gate_set.borrow_mut();
                 let mut position_map = position_map.borrow_mut();
-                self.gen_add_circuit(&mut gate_list, &mut gate_set, &mut position_map, pre, cur)
+                self.generate_additional_gate(
+                    &mut gate_list,
+                    &mut gate_set,
+                    &mut position_map,
+                    pre,
+                    cur,
+                )
             });
 
         gate_list
@@ -158,14 +202,12 @@ impl Parser {
             .change_result(Fr::from(0));
 
         (gate_list.take(), position_map.take())
-        //we will save a map of variable key to a stack of position, so all position is reversed
-        //first iteration we will have a vector of tuple of 3 value, (left, right, value, type (add, mul or const) )
-        //second iteration we will input corresponding position into that value and insert it to the gate system
     }
 
+    /// Generate the circuit with a [gate_list] and [position_map] to coordinate pair accumulator for copy constraint
     fn gen_circuit(
         gate_list: Vec<Gate>,
-        mut position_map: HashMap<String, Vec<(usize, usize)>>
+        mut position_map: HashMap<String, Vec<(usize, usize)>>,
     ) -> Circuit {
         let mut result = Circuit::default();
         for gate in gate_list.iter() {
@@ -198,7 +240,7 @@ impl Parser {
                 }
                 Constant => {
                     result = result.add_constant_gate(left, right, bottom, Fr::from(0));
-                },
+                }
             }
             #[cfg(test)]
             println!("{:?} {:?} {:?}", left, right, bottom);
@@ -206,7 +248,10 @@ impl Parser {
         result
     }
 
-    fn gen_add_circuit(
+    /// Generate additional gate
+    ///
+    /// Take in [left] and [right] as corresponding wire and output result wire
+    fn generate_additional_gate(
         &self,
         gate_list: &mut Vec<Gate>,
         gate_set: &mut HashSet<Gate>,
@@ -229,16 +274,11 @@ impl Parser {
 
         Self::push_into_position_map_or_insert(0, gate_number, position_map, &left.value_string);
         Self::push_into_position_map_or_insert(1, gate_number, position_map, &right.value_string);
-        Self::push_into_position_map_or_insert(
-            2,
-            gate_number,
-            position_map,
-            &result.value_string,
-        );
+        Self::push_into_position_map_or_insert(2, gate_number, position_map, &result.value_string);
         result
     }
 
-    //Get the value in Fr for variable in String
+    /// Get the value of [value] in Fr
     fn get_witness_value(&self, mut value: &str) -> Fr {
         let mut is_negative = false;
         if &value[..1] == "-" {
@@ -281,7 +321,7 @@ impl Parser {
     ///
     /// Feature:
     /// - Lower case
-    /// - Expand ^ into *
+    /// - Expand simple ^ into *
     /// - Delete space character " "
     fn parse_string(string: &str) -> String {
         let string = string.to_lowercase();
@@ -330,10 +370,7 @@ mod tests {
         parser.add_witness("x", Fr::from(1));
         parser.add_witness("y", Fr::from(2));
         parser.add_witness("z", Fr::from(3));
-        let compiled_circuit = parser
-            .parse("x*y+3*x*x+x*y*z=11")
-            .compile()
-            .unwrap();
+        let compiled_circuit = parser.parse("x*y+3*x*x+x*y*z=11").compile().unwrap();
 
         let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
 
@@ -430,10 +467,7 @@ mod tests {
         parser.add_witness("y", Fr::from(-2));
         parser.add_witness("z", Fr::from(-3));
 
-        let compiled_circuit = parser
-            .parse("x*y+3*x*x+x*y*z=-1")
-            .compile()
-            .unwrap();
+        let compiled_circuit = parser.parse("x*y+3*x*x+x*y*z=-1").compile().unwrap();
         let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
         assert!(verifier::verify::<Sha256>(&compiled_circuit, proof).is_ok());
     }
