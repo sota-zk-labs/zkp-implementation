@@ -128,6 +128,10 @@ impl KzgScheme {
 
     /// Aggregates multiple commitments into one commitment using a random challenge
     ///
+    /// For some challenge `v`, a list of commitments `(c_0, c_1, ... c_n) `
+    ///
+    /// We compute the aggregate commitment as `v^0 * c_0 + v^1 * c_1 + ...+ v^n * c_n`
+    ///
     /// # Arguments
     ///
     /// * `commitments`: The commitments to be aggregated
