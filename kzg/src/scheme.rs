@@ -3,9 +3,11 @@ use std::ops::{Add, Mul, Neg, Sub};
 
 use ark_bls12_381::{Bls12_381, Fr, G1Projective};
 use ark_ec::pairing::Pairing;
+use ark_ec::short_weierstrass::Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{One, Zero};
 use ark_poly::{DenseUVPolynomial, Polynomial};
+use rand::{Rng, RngCore};
 
 use crate::commitment::KzgCommitment;
 use crate::opening::KzgOpening;
@@ -153,6 +155,51 @@ impl KzgScheme {
         }
 
         KzgCommitment(result.into_affine())
+    }
+
+    /// Verifies that each proof is a valid proof of evaluation for `commitment_i` at `point_i`.
+    ///
+    /// This function is implemented according to the protocol on page 13 of the Plonk paper,
+    ///
+    /// # Arguments
+    ///
+    /// * `commitments`: The polynomials' commitments that need to be verified
+    /// * `points`: The corresponding challenge points
+    /// * `openings`: The corresponding open proof for polynomials
+    ///
+    /// # Returns
+    ///
+    /// `true` if all proofs is valid, otherwise `false`.
+    pub fn batch_verify(
+        &self,
+        commitments: &[KzgCommitment],
+        points: &[Fr],
+        openings: &[KzgOpening],
+        rng: &mut impl RngCore,
+    ) -> bool {
+        assert_eq!(commitments.len(), points.len());
+        assert_eq!(openings.len(), points.len());
+
+        let g1 = G1Point::generator();
+        let mut e_1 = G1Point::zero();
+        let mut e_2 = G1Point::zero();
+
+        for ((cm, z), KzgOpening(w, s)) in commitments.iter().zip(points).zip(openings) {
+            // cm_i - s_i
+            let cm_minus_s = *cm.inner() - g1.mul(s).into_affine();
+            // z_i * w_i
+            let z_mul_w = *w * z;
+            // r'
+            let r_prime = Fr::from(rng.gen::<u128>());
+            // e_1 += r_prime^i * (cm_i - s_i + z_i * w_i)
+            e_1 = Affine::from(e_1 + (cm_minus_s + z_mul_w) * r_prime);
+
+            // e_2 += r_prime^i * w_i;
+            e_2 = Affine::from(e_2 + (*w * r_prime));
+        }
+
+        // check if e(e_1, [1]_2) = e(e_2, [x]_2)
+        Bls12_381::pairing(e_1, self.0.g2()) == Bls12_381::pairing(e_2, self.0.g2s())
     }
 }
 
