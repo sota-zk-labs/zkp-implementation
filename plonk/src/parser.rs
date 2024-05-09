@@ -210,11 +210,14 @@ impl Parser {
         position_map: HashMap<String, Vec<(usize, usize)>>,
     ) -> Circuit {
         let mut result = Circuit::default();
-        let mut position_map = position_map.into_iter().map(|(key, mut vec)| {
-            vec.reverse();
-            vec.rotate_right(1);
-            (key, vec)
-        }).collect::<HashMap<String, Vec<(usize, usize)>>>();
+        let mut position_map = position_map
+            .into_iter()
+            .map(|(key, mut vec)| {
+                vec.reverse();
+                vec.rotate_right(1);
+                (key, vec)
+            })
+            .collect::<HashMap<String, Vec<(usize, usize)>>>();
         for gate in gate_list.iter() {
             #[cfg(test)]
             println!("{:?}", gate);
@@ -375,7 +378,7 @@ mod tests {
         parser.add_witness("x", Fr::from(1));
         parser.add_witness("y", Fr::from(2));
         parser.add_witness("z", Fr::from(3));
-        let compiled_circuit = parser.parse("x*y+3*x*x+x*y*z=11").compile().unwrap();
+        let compiled_circuit = parser.parse("x*y+3*x^2+x*y*z=11").compile().unwrap();
 
         let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
 
