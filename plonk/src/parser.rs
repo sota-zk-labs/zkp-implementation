@@ -207,9 +207,14 @@ impl Parser {
     /// Generate the circuit with a [gate_list] and [position_map] to coordinate pair accumulator for copy constraint
     fn gen_circuit(
         gate_list: Vec<Gate>,
-        mut position_map: HashMap<String, Vec<(usize, usize)>>,
+        position_map: HashMap<String, Vec<(usize, usize)>>,
     ) -> Circuit {
         let mut result = Circuit::default();
+        let mut position_map = position_map.into_iter().map(|(key, mut vec)| {
+            vec.reverse();
+            vec.rotate_right(1);
+            (key, vec)
+        }).collect::<HashMap<String, Vec<(usize, usize)>>>();
         for gate in gate_list.iter() {
             #[cfg(test)]
             println!("{:?}", gate);
@@ -389,15 +394,15 @@ mod tests {
         let hand_written_circuit = Circuit::default()
             .add_multiplication_gate(
                 // gate 0
-                (1, 2, Fr::from(1)),
+                (1, 1, Fr::from(1)),
                 (1, 0, Fr::from(2)),
-                (0, 4, Fr::from(2)),
+                (0, 3, Fr::from(2)),
                 Fr::from(0),
             )
             .add_multiplication_gate(
                 // gate 1
                 (0, 1, Fr::from(3)),
-                (1, 1, Fr::from(1)),
+                (1, 2, Fr::from(1)),
                 (0, 2, Fr::from(3)),
                 Fr::from(0),
             )
@@ -410,7 +415,7 @@ mod tests {
             )
             .add_addition_gate(
                 // gate 3
-                (0, 3, Fr::from(2)),
+                (0, 4, Fr::from(2)),
                 (2, 2, Fr::from(3)),
                 (0, 5, Fr::from(5)),
                 Fr::from(0),
