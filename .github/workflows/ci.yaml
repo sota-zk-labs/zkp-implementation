@@ -11,7 +11,8 @@ on:
 jobs:
   cargo-check:
     name: Cargo check
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -26,7 +27,8 @@ jobs:
 
   fmt-check:
     name: Rust fmt
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -42,7 +44,8 @@ jobs:
 
   test-and-coverage:
     name: Test and Coverage
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,7 +65,8 @@ jobs:
     name: Release Packaging
     env:
       PROJECT_NAME_UNDERSCORE: rust-server
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [cargo-check, fmt-check, test-and-coverage]
     steps:
