@@ -2,15 +2,9 @@ use sha2::Digest;
 use kzg::opening::KzgOpening;
 use kzg::scheme::KzgScheme;
 use kzg::types::ScalarField;
-use crate::nifs::nifs::{FInstance, FWitness, NIFS};
+use crate::nifs::{FInstance, FWitness, NIFS, NIFSProof};
 use crate::transcript::Transcript;
 
-pub struct NIFSProof {
-    pub r: ScalarField,
-    pub opening_point: ScalarField,
-    pub opening_e: KzgOpening,
-    pub opening_w: KzgOpening
-}
 
 impl <T: Digest + Default> NIFS<T> {
     pub fn prove(

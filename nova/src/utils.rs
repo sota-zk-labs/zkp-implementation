@@ -1,6 +1,6 @@
 use ark_ff::PrimeField;
 
-pub fn matrix_vector_product<F: PrimeField>(matrix: &Vec<Vec<F>>, z: &[F]) -> Vec<F> {
+pub fn matrix_vector_product<F: PrimeField>(matrix: &Vec<Vec<F>>, z: &Vec<F>) -> Vec<F> {
     let mut r: Vec<F> = vec![F::zero(); matrix.len()];
     for i in 0..matrix.len() {
         for j in 0..matrix[i].len() {
@@ -42,6 +42,19 @@ pub fn vec_add<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
         r[i] = a[i] + b[i];
     }
     r
+}
+
+pub fn vec_equal<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+
+    for i in 0..a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+    }
+    true
 }
 
 pub fn to_f_matrix<F: PrimeField> (matrix: Vec<Vec<usize>>) -> Vec<Vec<F>> {
