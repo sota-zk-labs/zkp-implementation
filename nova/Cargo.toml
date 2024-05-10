@@ -1,0 +1,15 @@
+[package]
+name = "nova"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ark-ff = "0.4.2"
+ark-ec = "0.4.2"
+ark-bls12-381 = "0.4.0"
+ark-serialize = "0.4.2"
+ark-std = "0.4.0"
+rand = "0.8.5"
+sha2 = "0.10"
+kzg = { path = "../kzg" }
+plonk = {path = "../plonk"}
