@@ -4,12 +4,13 @@ use std::ops::{Add, Mul, Neg, Sub};
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_poly::{DenseUVPolynomial, Polynomial};
+use ark_poly::{DenseUVPolynomial, Evaluations, Polynomial};
+use ark_poly::univariate::DensePolynomial;
 
 use crate::commitment::KzgCommitment;
 use crate::opening::KzgOpening;
 use crate::srs::Srs;
-use crate::types::{G1Point, Poly};
+use crate::types::{G1Point, Poly, ScalarField};
 
 /// Implements the KZG polynomial commitment scheme.
 ///
@@ -44,6 +45,12 @@ impl KzgScheme {
     /// The commitment to the polynomial.
     pub fn commit(&self, polynomial: &Poly) -> KzgCommitment {
         let commitment = self.evaluate_in_s(polynomial);
+        KzgCommitment(commitment)
+    }
+
+    pub fn commit_vector(&self, coeffs: &Vec<ScalarField>) -> KzgCommitment {
+        let new_poly = DensePolynomial::from_coefficients_vec(coeffs.clone());
+        let commitment = self.evaluate_in_s(&new_poly);
         KzgCommitment(commitment)
     }
 
@@ -96,6 +103,21 @@ impl KzgScheme {
         let opening = self.evaluate_in_s(&new_poly);
 
         KzgOpening(opening, evaluation_at_z)
+    }
+
+    pub fn open_vector(&self, coeffs: &Vec<ScalarField>, z: impl Into<Fr>) -> KzgOpening {
+
+        let z = z.into();
+        let mut polynomial = DensePolynomial::from_coefficients_vec(coeffs.clone());
+        let evaluation_at_z = polynomial.evaluate(&z);
+        let first = polynomial.coeffs.first_mut().expect("at least 1");
+        *first -= evaluation_at_z;
+        let root = Poly::from_coefficients_slice(&[-z, 1.into()]);
+        let new_poly = &polynomial / &root;
+        let opening = self.evaluate_in_s(&new_poly);
+
+        KzgOpening(opening, evaluation_at_z)
+
     }
 
     /// Verifies the correctness of an opening.
