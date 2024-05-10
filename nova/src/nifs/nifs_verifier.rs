@@ -2,8 +2,7 @@ use ark_ff::PrimeField;
 use sha2::Digest;
 use kzg::commitment::KzgCommitment;
 use kzg::scheme::KzgScheme;
-use crate::nifs::nifs::{FInstance, NIFS, R1CS};
-use crate::nifs::nifs_prover::NIFSProof;
+use crate::nifs::{FInstance, NIFS, R1CS, NIFSProof};
 use crate::transcript::Transcript;
 use crate::utils::{to_f_matrix, to_f_vec};
 
@@ -97,7 +96,7 @@ pub fn gen_test_values<F: PrimeField>(n: usize) -> (R1CS<F>, Vec<Vec<F>>, Vec<Ve
     // println!("w: {:?}", w);
     // println!("x: {:?}", x);
 
-    let r1cs = R1CS::<F> { matrix_a: a, matrix_b: b, matrix_c: c };
+    let r1cs = R1CS::<F> { matrix_a: a, matrix_b: b, matrix_c: c, num_io: 1, num_vars: 6 };
     (r1cs, w, x)
 }
 
@@ -107,17 +106,15 @@ mod tests {
     use super::*;
     use sha2::Sha256;
     use kzg::srs::Srs;
-    use nifs::FWitness;
-    use crate::nifs::nifs;
-    use crate::nifs::nifs::NIFS;
+    use crate::nifs::{FWitness, NIFS};
 
     #[test]
     fn test_one_fold() {
-        /// generate R1CS, witnesses and public input, output.
+        // generate R1CS, witnesses and public input, output.
         let (r1cs, witnesses, x) = gen_test_values(2);
-        let (matrix_a, matrix_b, matrix_c) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
+        let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
 
-        /// Trusted setup
+        // Trusted setup
         let domain_size = witnesses[0].len() + x[0].len() + 1;
         let srs = Srs::new(domain_size);
         let scheme = KzgScheme::new(srs);
