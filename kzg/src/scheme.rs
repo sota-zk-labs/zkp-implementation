@@ -4,7 +4,7 @@ use std::ops::{Add, Mul, Neg, Sub};
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_poly::{DenseUVPolynomial, Evaluations, Polynomial};
+use ark_poly::{DenseUVPolynomial, Polynomial};
 use ark_poly::univariate::DensePolynomial;
 
 use crate::commitment::KzgCommitment;
