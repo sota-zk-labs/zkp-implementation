@@ -43,7 +43,7 @@ pub struct AugmentedCircuit<T: Digest + Default + ark_serialize::Write, F: Prime
 impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F> > AugmentedCircuit <T, F, FC> {
     pub fn run(
         &self,
-        ivc_proof: &ZkIVCProof,
+        zk_ivc_proof: &ZkIVCProof,
         w_i: &FWitness,
         transcript: &mut Transcript<T>,
     ) -> Result<(State, ScalarField), String>{
@@ -52,7 +52,7 @@ impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F>
         let mut new_x;
 
         // compute hash(i, z_0, z_i, U_i)
-        let hash_x = Self::hash_io(self.i, &self.z_0, &self.z_i, &ivc_proof.big_u_i);
+        let hash_x = Self::hash_io(self.i, &self.z_0, &self.z_i, &zk_ivc_proof.big_u_i);
 
         if self.i != BaseField::from(0) {
 
@@ -60,31 +60,31 @@ impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F>
             // Because u_i.x is in ScalarField while hash is in BaseField, they need to
             // be converted into a comparable type
             // Todo: Non-native field transform
-            let u_dot_x = ivc_proof.u_i.x[0].clone();
+            let u_dot_x = zk_ivc_proof.u_i.x[0].clone();
             let hash_fr = ScalarField::from_le_bytes_mod_order(&hash_x.into_bigint().to_bytes_le());
             if u_dot_x != hash_fr {
                 return Err(String::from("Public IO is wrong "));
             }
 
             // 2. check that u_i.comE = com_([0,...]) and u_i.u = 1
-            if ivc_proof.u_i.com_e != self.trivial_instance.com_e {
+            if zk_ivc_proof.u_i.com_e != self.trivial_instance.com_e {
                 return Err(String::from("Commitment of E is wrong"));
             }
-            if ivc_proof.u_i.u.is_one() {
+            if zk_ivc_proof.u_i.u.is_one() {
                 return Err(String::from("Commitment of E is wrong"));
             }
 
             // 3. verify challenge r
-            let r = ivc_proof.folded_u_proof.clone().unwrap().r;
-            let com_t = ivc_proof.com_t.clone().unwrap();
+            let r = zk_ivc_proof.folded_u_proof.clone().unwrap().r;
+            let com_t = zk_ivc_proof.com_t.clone().unwrap();
 
-            let challenge_checker = NIFS::<T>::verify_challenge(r, ivc_proof.u_i.u, ivc_proof.big_u_i.u, &com_t, transcript);
+            let challenge_checker = NIFS::<T>::verify_challenge(r, zk_ivc_proof.u_i.u, zk_ivc_proof.big_u_i.u, &com_t, transcript);
             if challenge_checker.is_err() {
                 return Err(challenge_checker.unwrap_err());
             }
 
             // 3.compute U_{i+1}
-            let big_u_i1 = NIFS::<T>::verifier(r, &ivc_proof.u_i, &ivc_proof.big_u_i, &com_t);
+            let big_u_i1 = NIFS::<T>::verifier(r, &zk_ivc_proof.u_i, &zk_ivc_proof.big_u_i, &com_t);
 
             // compute z_{i+1} = F(z_i, w_i)
             z_i1 = self.f_circuit.run(&self.z_i, w_i);
