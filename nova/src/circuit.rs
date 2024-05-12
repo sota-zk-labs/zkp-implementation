@@ -7,8 +7,8 @@ use ark_std::UniformRand;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use sha2::Digest;
-use kzg::commitment::KzgCommitment;
 use kzg::types::{BaseField, ScalarField};
+use crate::ivc::ZkIVCProof;
 use crate::nifs::{NIFS};
 use crate::r1cs::{FInstance, FWitness};
 use crate::transcript::Transcript;
@@ -21,42 +21,38 @@ pub type ConstraintF<C> = <<C as CurveGroup>::BaseField as Field>::BasePrimeFiel
 pub struct State {
     pub state: BaseField,
 }
-pub struct FCircuit {
-    // state u_i
-    u_i: State,
-    // state u_{i+1}
-    u_i1: State,
+
+/// trait for F circuit
+pub trait FCircuit<F: PrimeField> {
+    // return state z_{i+1} = F(z_i, w_i)
+    fn run(&self, z_i: &State, w_i: &FWitness) -> State;
 }
 
-impl FCircuit {
-    pub fn run(&self, fwitness: &FWitness) {
-
-    }
-}
 
 /// F' circuit
-pub struct AugmentedCircuit<T: Digest + Default + ark_serialize::Write> {
-    pub f_circuit: FCircuit,
+pub struct AugmentedCircuit<T: Digest + Default + ark_serialize::Write, F: PrimeField,  FC: FCircuit<F>> {
+    pub f_circuit: FC,
     pub i: BaseField,
     pub trivial_instance: FInstance, // trivial instance.
     pub z_0: State,
     pub z_i: State,
-
-    phantom_data: PhantomData<T>,
+    phantom_data_t: PhantomData<T>,
+    phantom_data_f: PhantomData<F>,
 }
 
-impl <T: Digest + Default + ark_serialize::Write> AugmentedCircuit <T>{
+impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F> > AugmentedCircuit <T, F, FC> {
     pub fn run(
         &self,
-        u_i: &FInstance,
+        ivc_proof: &ZkIVCProof,
         w_i: &FWitness,
-        big_u_i: &FInstance,
-        r: Option<ScalarField>,
-        com_t: Option<&KzgCommitment>,
         transcript: &mut Transcript<T>,
     ) -> Result<(State, ScalarField), String>{
+
+        let mut z_i1;
+        let mut new_x;
+
         // compute hash(i, z_0, z_i, U_i)
-        let hash_x = Self::hash_io(self.i, &self.z_0, &self.z_i, big_u_i);
+        let hash_x = Self::hash_io(self.i, &self.z_0, &self.z_i, &ivc_proof.big_u_i);
 
         if self.i != BaseField::from(0) {
 
@@ -64,49 +60,58 @@ impl <T: Digest + Default + ark_serialize::Write> AugmentedCircuit <T>{
             // Because u_i.x is in ScalarField while hash is in BaseField, they need to
             // be converted into a comparable type
             // Todo: Non-native field transform
-            let u_dot_x = u_i.x[0].clone();
+            let u_dot_x = ivc_proof.u_i.x[0].clone();
             let hash_fr = ScalarField::from_le_bytes_mod_order(&hash_x.into_bigint().to_bytes_le());
             if u_dot_x != hash_fr {
                 return Err(String::from("Public IO is wrong "));
             }
 
             // 2. check that u_i.comE = com_([0,...]) and u_i.u = 1
-            if u_i.com_e != self.trivial_instance.com_e {
+            if ivc_proof.u_i.com_e != self.trivial_instance.com_e {
                 return Err(String::from("Commitment of E is wrong"));
             }
-            if u_i.u.is_one() {
+            if ivc_proof.u_i.u.is_one() {
                 return Err(String::from("Commitment of E is wrong"));
             }
 
             // 3. verify challenge r
-            let challenge_checker = NIFS::<T>::verify_challenge(r.unwrap(), u_i.u, big_u_i.u, com_t.unwrap(), transcript);
+            let r = ivc_proof.folded_u_proof.clone().unwrap().r;
+            let com_t = ivc_proof.com_t.clone().unwrap();
+
+            let challenge_checker = NIFS::<T>::verify_challenge(r, ivc_proof.u_i.u, ivc_proof.big_u_i.u, &com_t, transcript);
             if challenge_checker.is_err() {
                 return Err(challenge_checker.unwrap_err());
             }
 
             // 3.compute U_{i+1}
-            let big_u_i1 = NIFS::<T>::verifier(r.unwrap(), u_i, big_u_i, com_t.unwrap());
+            let big_u_i1 = NIFS::<T>::verifier(r, &ivc_proof.u_i, &ivc_proof.big_u_i, &com_t);
 
             // compute z_{i+1} = F(z_i, w_i)
-            self.f_circuit.run(w_i);
-            let z_i1 = self.f_circuit.u_i1.clone();
+            z_i1 = self.f_circuit.run(&self.z_i, w_i);
 
             // compute hash
             let mut new_hash= Self::hash_io(self.i.add(BaseField::one()), &self.z_0, &z_i1, &big_u_i1);
             // convert into ScalarField
-            let new_x = ScalarField::from_le_bytes_mod_order(&new_hash.into_bigint().to_bytes_le());
-            return Ok((z_i1, new_x));
+            new_x = ScalarField::from_le_bytes_mod_order(&new_hash.into_bigint().to_bytes_le());
+
         } else { // i == 0
 
             // compute z_1 = F(z_0, w_i)
-            self.f_circuit.run(w_i);
-            let z_i1 = self.f_circuit.u_i1.clone();
+            z_i1 = self.f_circuit.run(&self.z_i, w_i);
+
+            // compute hash
             let new_hash = Self::hash_io(BaseField::one(), &self.z_0, &z_i1, &self.trivial_instance);
             // convert into ScalarField
-            let new_x = ScalarField::from_le_bytes_mod_order(&new_hash.into_bigint().to_bytes_le());
-            return Ok((z_i1, new_x));
+            new_x = ScalarField::from_le_bytes_mod_order(&new_hash.into_bigint().to_bytes_le());
+
         }
 
+        return Ok((z_i1, new_x));
+
+    }
+    pub fn next_state(&mut self, z_i1: &State) {
+        self.z_i = z_i1.clone();
+        self.i = self.i + BaseField::one();
     }
 
     /// A function compute public IO of an instance: u.x = hash(i, z0, zi, Ui).

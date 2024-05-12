@@ -3,13 +3,22 @@ use sha2::Digest;
 use kzg::commitment::KzgCommitment;
 use kzg::scheme::KzgScheme;
 use kzg::types::ScalarField;
-use plonk::prover::Proof;
 use crate::nifs::{FInstance, NIFS, R1CS, NIFSProof};
 use crate::transcript::Transcript;
 use crate::utils::{to_f_matrix, to_f_vec};
 
 
 impl <T: Digest + Default> NIFS<T> {
+
+    pub fn verifier(
+        r: ScalarField,
+        fi1: &FInstance,
+        fi2: &FInstance,
+        com_t: &KzgCommitment,
+    ) -> FInstance {
+        NIFS::<T>::fold_instance(r, fi1, fi2, com_t)
+    }
+
     pub fn verify(
         proof: &NIFSProof,
         fi1: &FInstance,
