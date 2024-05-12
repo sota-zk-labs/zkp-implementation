@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 use std::ops::Mul;
 use ark_ec::CurveGroup;
-use ark_ff::fields::PrimeField;
 
 use kzg::commitment::KzgCommitment;
 use kzg::scheme::KzgScheme;

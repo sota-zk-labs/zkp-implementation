@@ -2,6 +2,8 @@ use ark_ff::PrimeField;
 use sha2::Digest;
 use kzg::commitment::KzgCommitment;
 use kzg::scheme::KzgScheme;
+use kzg::types::ScalarField;
+use plonk::prover::Proof;
 use crate::nifs::{FInstance, NIFS, R1CS, NIFSProof};
 use crate::transcript::Transcript;
 use crate::utils::{to_f_matrix, to_f_vec};
@@ -9,7 +11,7 @@ use crate::utils::{to_f_matrix, to_f_vec};
 
 impl <T: Digest + Default> NIFS<T> {
     pub fn verify(
-        proof: NIFSProof,
+        proof: &NIFSProof,
         fi1: &FInstance,
         fi2: &FInstance,
         fi3: &FInstance, // folded instance.
@@ -18,29 +20,57 @@ impl <T: Digest + Default> NIFS<T> {
         transcript: &mut Transcript<T>
     ) -> Result<(), String> {
 
-        transcript.feed_scalar_num(fi1.u);
-        transcript.feed_scalar_num(fi2.u);
+        // verify challenge.
+        let mut res = Self::verify_challenge(proof.r, fi1.u, fi2.u, com_t, transcript);
+        if res.is_err() {
+            return res;
+        }
+
+        // verify opening.
+        res = Self::verify_opening(proof, fi3, scheme, transcript);
+        if res.is_err() {
+            return res;
+        }
+
+        Ok(())
+    }
+
+    pub fn verify_challenge(
+        r: ScalarField,
+        fi1_u: ScalarField,
+        fi2_u: ScalarField,
+        com_t: &KzgCommitment,
+        transcript: &mut Transcript<T>
+    ) -> Result<(), String> {
+        // recreate folded instance
+        transcript.feed_scalar_num(fi1_u);
+        transcript.feed_scalar_num(fi2_u);
         transcript.feed(&com_t);
         // Verify that proof.r = Transcript(fi1.u, fi2.u, cmT)
-        let [r] = transcript.generate_challenges();
-        // println!("verifier_r: {:?}", r);
-        // println!("prover_r: {:?}", proof.r);
-        // println!("{:?}", r == proof.r);
-        if r != proof.r {
+        let [new_r] = transcript.generate_challenges();
+
+        // verify challenge r
+        if new_r != r {
             return Err(String::from("Verify: Error in computing random r"))
         }
 
+        Ok(())
+    }
+    pub fn verify_opening(
+        proof: &NIFSProof,
+        fi3: &FInstance, // folded instance.
+        scheme: &KzgScheme,
+        transcript: &mut Transcript<T>
+    ) -> Result<(), String> {
         transcript.feed(&fi3.com_e);
         transcript.feed(&fi3.com_w);
         // Verify Opening_point = Transcript(fi1.cmE, fi1.cmW)
         let [opening_point] = transcript.generate_challenges();
         if opening_point != proof.opening_point {
-            return Err(String::from("Verify: Error in computing random opening point"))
+            return Err(String::from("Verify: Error in computing random opening point"));
         }
-        // println!("fi.cW is2: {:?}", fi3.cW);
-        // println!("openingW is2: {:?}", proof.openingW);
-        // println!("opening_point is2: {:?}", opening_point);
 
+        // Verify opening
         if !scheme.verify(&fi3.com_w, &proof.opening_w, opening_point) {
             return Err(String::from("Verify: Folding wrong at W"));
         }
@@ -133,7 +163,7 @@ mod tests {
         let proof = NIFS::<Sha256>::prove(r, &p_folded_witness, &p_folded_instance, &scheme, &mut prover_transcript);
         let v_folded_instance = NIFS::<Sha256>::verifier(r, &fi1, &fi2, &com_t);
 
-        let result = NIFS::<Sha256>::verify(proof, &fi1, &fi2, &v_folded_instance, &com_t, &scheme, &mut verifier_transcript);
+        let result = NIFS::<Sha256>::verify(&proof, &fi1, &fi2, &v_folded_instance, &com_t, &scheme, &mut verifier_transcript);
         println!("{:?}", result);
         assert!(result.is_ok());
     }
