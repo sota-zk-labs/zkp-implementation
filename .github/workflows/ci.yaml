@@ -20,7 +20,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: arduino/setup-protoc@v3
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -55,8 +54,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-
-      - uses: arduino/setup-protoc@v3
 
       - name: Install dependencies
         run: |
@@ -95,8 +92,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-
-      - uses: arduino/setup-protoc@v3
 
       - name: Release Build
         run: cargo build --release --all
