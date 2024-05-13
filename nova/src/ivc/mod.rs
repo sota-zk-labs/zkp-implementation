@@ -1,4 +1,5 @@
 mod ivc_prover;
+mod ivc_verifier;
 
 use ark_ff::PrimeField;
 use sha2::Digest;

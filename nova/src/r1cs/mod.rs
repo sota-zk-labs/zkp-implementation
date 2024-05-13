@@ -16,7 +16,7 @@ pub struct R1CS<F: PrimeField> {
 
 /// Create Committed Relaxed R1CS Instance structure with KZG commitment
 /// Todo: Need to impl a general-curve commitment.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FInstance {
     pub com_e: KzgCommitment,
     pub u: ScalarField,
@@ -103,4 +103,27 @@ pub fn is_satis_relaxed(
         return Err(String::from("Instance does not satisfy the Witness."))
     }
 
+}
+
+
+#[cfg(test)]
+
+mod tests {
+    use kzg::scheme::KzgScheme;
+    use kzg::srs::Srs;
+    use kzg::types::ScalarField;
+    use crate::nifs::nifs_verifier::gen_test_values;
+
+    #[test]
+    pub fn test_r1cs() {
+        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(2);
+        let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
+
+        // Trusted setup
+        let domain_size = witnesses[0].len() + x[0].len() + 1;
+        let srs = Srs::new(domain_size);
+        let scheme = KzgScheme::new(srs);
+
+
+    }
 }

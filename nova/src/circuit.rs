@@ -3,9 +3,6 @@ use std::ops::Add;
 use ark_ec::CurveGroup;
 use ark_ff::{BigInteger, Field, One, PrimeField};
 use ark_serialize::CanonicalSerialize;
-use ark_std::UniformRand;
-use rand::prelude::StdRng;
-use rand::SeedableRng;
 use sha2::Digest;
 use kzg::types::{BaseField, ScalarField};
 use crate::ivc::ZkIVCProof;
@@ -71,7 +68,7 @@ impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F>
                 return Err(String::from("Commitment of E is wrong"));
             }
             if zk_ivc_proof.u_i.u.is_one() {
-                return Err(String::from("Commitment of E is wrong"));
+                return Err(String::from("Scalar u is wrong"));
             }
 
             // 3. verify challenge r
@@ -115,16 +112,16 @@ impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F>
     }
 
     /// A function compute public IO of an instance: u.x = hash(i, z0, zi, Ui).
-    fn hash_io(
+    pub fn hash_io(
         i: BaseField,
+        z_0: &State,
         z_i: &State,
-        z_i1: &State,
         big_u: &FInstance
     ) -> BaseField {
         let mut hasher = T::default();
         i.serialize_uncompressed(&mut hasher).unwrap();
+        z_0.state.serialize_uncompressed(&mut hasher).unwrap();
         z_i.state.serialize_uncompressed(&mut hasher).unwrap();
-        z_i1.state.serialize_uncompressed(&mut hasher).unwrap();
 
         big_u.com_e.0.serialize_uncompressed(&mut hasher).unwrap();
         big_u.u.serialize_uncompressed(&mut hasher).unwrap();
@@ -134,12 +131,8 @@ impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F>
             x.serialize_uncompressed(&mut hasher).unwrap();
         }
 
-        let data = Some(hasher.finalize().to_vec());
-        let mut seed: [u8; 8] = Default::default();
-        seed.copy_from_slice(&data.clone().unwrap_or_default()[0..8]);
-        let seed = u64::from_le_bytes(seed);
-        let mut rng = StdRng::seed_from_u64(seed);
-        BaseField::rand(&mut rng)
+        let data = hasher.finalize().to_vec();
+        BaseField::from_le_bytes_mod_order(&data)
     }
 }
 

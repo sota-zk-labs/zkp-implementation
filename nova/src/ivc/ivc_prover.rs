@@ -1,6 +1,6 @@
 use ark_ff::{PrimeField, Zero};
 use sha2::Digest;
-use kzg::types::BaseField;
+use kzg::types::{BaseField, ScalarField};
 use crate::circuit::{FCircuit};
 use crate::ivc::{IVC, IVCProof, ZkIVCProof};
 use crate::nifs::NIFS;
@@ -11,14 +11,14 @@ impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F>
     pub fn prove(
         &self,
         prover_transcript: &mut Transcript<T>,
-        r1cs: &R1CS<F>,
+        r1cs: &R1CS<ScalarField>,
         i: BaseField,
         ivc_proof: &IVCProof,
     ) -> ZkIVCProof {
 
         if ! i.is_zero() {
             let (big_w_out, big_u_out, com_t, r) = NIFS::<T>::prover(
-                r1cs,
+                &r1cs,
                 &ivc_proof.w_i,
                 &ivc_proof.big_w_i,
                 &ivc_proof.u_i,
@@ -44,6 +44,4 @@ impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F>
             }
         }
     }
-
-
 }
