@@ -9,7 +9,7 @@ use kzg::opening::KzgOpening;
 use crate::r1cs::{FInstance, FWitness, R1CS};
 use crate::utils::{hadamard_product, matrix_vector_product, vec_add, vec_sub, vector_elem_product};
 
-mod nifs_verifier;
+pub(crate) mod nifs_verifier;
 mod nifs_prover;
 
 #[derive(Clone)]
