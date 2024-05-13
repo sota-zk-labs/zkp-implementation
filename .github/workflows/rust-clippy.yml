@@ -19,29 +19,17 @@ on:
     - cron: '27 4 * * 6'
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install protoc and grpcio-tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          cargo install grpcio-compiler
-
   rust-clippy-analyze:
     name: Run Rust Clippy Analyzer
-    runs-on: ubuntu-latest
-    needs: setup
+    runs-on:
+      group: Default
     permissions:
       contents: read
       security-events: write
       actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af #@v1
@@ -62,7 +50,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload analysis results to GitHub
-        uses: github/codeql-action/upload-sarif@v1
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: rust-clippy-results.sarif
           wait-for-processing: true
