@@ -51,14 +51,14 @@ impl <T: Digest + Default> NIFS<T> {
         com_t: &KzgCommitment,
         transcript: &mut Transcript<T>
     ) -> Result<(), String> {
-        // recreate folded instance
+        // Recreate challenge r
         transcript.feed_scalar_num(fi1_u);
         transcript.feed_scalar_num(fi2_u);
         transcript.feed(&com_t);
-        // Verify that proof.r = Transcript(fi1.u, fi2.u, cmT)
+
         let [new_r] = transcript.generate_challenges();
 
-        // verify challenge r
+        // Verify that proof.r = Transcript(fi1.u, fi2.u, cmT)
         if new_r != r {
             return Err(String::from("Verify: Error in computing random r"))
         }
@@ -92,7 +92,7 @@ impl <T: Digest + Default> NIFS<T> {
     }
 }
 
-pub fn gen_test_values<F: PrimeField>(n: usize) -> (R1CS<F>, Vec<Vec<F>>, Vec<Vec<F>>) {
+pub fn gen_test_values<F: PrimeField>(inputs: Vec<usize>) -> (R1CS<F>, Vec<Vec<F>>, Vec<Vec<F>>) {
     // R1CS for: x^3 + x + 5 = y (example from article
     // https://vitalik.eth.limo/general/2016/12/10/qap.html )
 
@@ -118,8 +118,7 @@ pub fn gen_test_values<F: PrimeField>(n: usize) -> (R1CS<F>, Vec<Vec<F>>, Vec<Ve
     // generate n witnesses
     let mut w: Vec<Vec<F>> = Vec::new();
     let mut x: Vec<Vec<F>> = Vec::new();
-    for i in 0..n {
-        let input = 3 + i;
+    for input in inputs {
         let w_i = to_f_vec::<F>(vec![
             1,
             input,
@@ -150,7 +149,7 @@ mod tests {
     #[test]
     fn test_one_fold() {
         // generate R1CS, witnesses and public input, output.
-        let (r1cs, witnesses, x) = gen_test_values(2);
+        let (r1cs, witnesses, x) = gen_test_values(vec![3, 4]);
         let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
 
         // Trusted setup
