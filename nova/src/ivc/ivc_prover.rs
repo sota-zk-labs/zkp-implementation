@@ -1,21 +1,21 @@
-use ark_ff::{PrimeField, Zero};
+use ark_ff::{Zero};
 use sha2::Digest;
-use kzg::types::{BaseField, ScalarField};
+use kzg::types::{ScalarField};
 use crate::circuit::{FCircuit};
 use crate::ivc::{IVC, IVCProof, ZkIVCProof};
 use crate::nifs::NIFS;
 use crate::r1cs::R1CS;
 use crate::transcript::Transcript;
 
-impl <T: Digest + Default + ark_serialize::Write, F: PrimeField, FC: FCircuit<F> > IVC <T, F, FC> {
+impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > IVC <T, FC> {
     pub fn prove(
         &self,
-        prover_transcript: &mut Transcript<T>,
         r1cs: &R1CS<ScalarField>,
-        i: BaseField,
         ivc_proof: &IVCProof,
+        prover_transcript: &mut Transcript<T>,
     ) -> ZkIVCProof {
 
+        let i = self.augmented_circuit.i;
         if ! i.is_zero() {
             let (big_w_out, big_u_out, com_t, r) = NIFS::<T>::prover(
                 &r1cs,

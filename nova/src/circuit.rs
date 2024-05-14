@@ -32,8 +32,10 @@ pub struct AugmentedCircuit<T: Digest + Default + ark_serialize::Write, FC: FCir
     pub i: BaseField,
     pub trivial_instance: FInstance, // trivial instance.
     pub z_0: State,
+    pub z_i1: Option<State>, // store the next state, use for update step.
     pub z_i: State,
     pub hash_x: Option<BaseField>,
+    pub hash_x_next: Option<BaseField>, // store the next hash IO, use for update step
     pub phantom_data_t: PhantomData<T>,
 }
 
@@ -97,8 +99,10 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             // compute hash
             let new_hash= Self::hash_io(self.i.add(BaseField::one()), &self.z_0, &z_i1, &big_u_i1);
 
-            // update augmented F function to the next step
-            self.next_step(&z_i1, new_hash);
+            // store the next hash
+            self.hash_x_next = Some(new_hash);
+            // store the next state
+            self.z_i1 = Some(z_i1);
 
         } else { // i == 0
 
@@ -108,18 +112,19 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             // compute hash
             let new_hash = Self::hash_io(BaseField::one(), &self.z_0, &z_i1, &self.trivial_instance);
 
-            // update augmented F function to the next step
-            self.next_step(&z_i1, new_hash);
-
+            // store the next hash
+            self.hash_x_next = Some(new_hash);
+            // store the next state
+            self.z_i1 = Some(z_i1);
         }
 
-        return Ok(self.hash_x.unwrap());
+        return Ok(self.hash_x_next.unwrap());
     }
 
-    fn next_step(&mut self, z_i1: &State, hash_x: BaseField) {
-        self.z_i = z_i1.clone();
+    pub fn next_step(&mut self) {
+        self.z_i = self.z_i1.clone().unwrap();
         self.i = self.i + BaseField::one();
-        self.hash_x = Some(hash_x);
+        self.hash_x = self.hash_x_next;
     }
 
     /// A function compute public IO of an instance: u.x = hash(i, z0, zi, Ui).
