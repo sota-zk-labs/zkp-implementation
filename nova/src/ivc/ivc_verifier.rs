@@ -97,11 +97,11 @@ mod tests {
 
     #[test]
     fn test_ivc_step_by_step_1() {
-        // This test:  (x1^3 + x1 + 5) + (x2^3 + x2 + 5) = 108
-        // x1 = 3, x2 = 4
+        // This test:  (x0^3 + x0 + 5) + (x1^3 + x1 + 5) + (x2^3 + x2 + 5)= 115
+        // x0 = 3, x1 = 4, x2 = 1
 
         // generate R1CS, witnesses and public input, output.
-        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4]);
+        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4, 1]);
         let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
 
         // Trusted setup
@@ -111,10 +111,13 @@ mod tests {
 
         let w_0 = FWitness::new(&witnesses[0], matrix_a.len());
         let w_1 = FWitness::new(&witnesses[1], matrix_a.len());
+        let w_2 = FWitness::new(&witnesses[2], matrix_a.len());
 
         let u_0 = w_0.commit(&scheme, &x[0]);
         let mut u_1 = w_1.commit(&scheme, &x[1]);
+        let mut u_2 = w_2.commit(&scheme, &x[2]);
 
+        // step i
         let mut i = BaseField::zero();
 
         // generate trivial_instance
@@ -122,8 +125,10 @@ mod tests {
         let trivial_witness = FWitness::new_trivial_witness(witnesses[0].len());
         let trivial_instance = trivial_witness.commit(&scheme, &trivial_x);
 
+        // generate f_circuit instance
         let f_circuit = TestCircuit{};
 
+        // generate state
         let z_0 = State{state: BaseField::from(0)};
         let z_1 = f_circuit.run(&z_0, &w_0);
         let z_2 = f_circuit.run(&z_1, &w_1);
@@ -131,6 +136,7 @@ mod tests {
         let mut prover_transcript = Transcript::<Sha256>::default();
         let mut verifier_transcript = Transcript::<Sha256>::default();
 
+        // create F'
         let mut augmented_circuit = AugmentedCircuit::<Sha256, TestCircuit> {
             f_circuit,
             i: BaseField::zero(),
@@ -149,6 +155,25 @@ mod tests {
             augmented_circuit
         };
 
+        // initialize IVC proof, zkIVCProof, folded witness and folded instance
+        let mut ivc_proof = IVCProof {
+            w_i: trivial_witness.clone(),
+            u_i: trivial_instance.clone(),
+            big_w_i: trivial_witness.clone(),
+            big_u_i: trivial_instance.clone(),
+        };
+
+        let mut zk_ivc_proof = ZkIVCProof {
+            u_i: trivial_instance.clone(),
+            big_u_i: trivial_instance.clone(),
+            com_t: None,
+            folded_u_proof: None,
+        };
+
+        let mut folded_witness = trivial_witness.clone();
+        let mut folded_instance = trivial_instance.clone();
+
+        println!("Step 1");
         // run F' for the first time
         // With i = 0, the instance U_i and commitment com_t do not exist.
         let res1 = ivc.augmented_circuit.run(
@@ -157,34 +182,50 @@ mod tests {
             &w_0,
             None,
         );
+
         if res1.is_err() {
             println!("Step: {:?}, {:?}", i, res1);
         }
+        assert!(res1.is_ok());
+
+        // verifier verify this step
+        let result = ivc.verify(&zk_ivc_proof, &mut verifier_transcript);
+        if result.is_err() {
+            println!("{:?}", result);
+        }
+        assert!(result.is_ok());
 
         // update for next step
         ivc.augmented_circuit.next_step();
         i = i + BaseField::one();
+        assert_eq!(ivc.augmented_circuit.z_i.state, BaseField::from(35));
+        prover_transcript = Transcript::<Sha256>::default();
+        verifier_transcript = Transcript::<Sha256>::default();
 
+        // because all instances above are from F, not F', so we need to do this trick.
         let u_1_x = AugmentedCircuit::<Sha256, TestCircuit>::hash_io(i, &z_0, &z_1, &trivial_instance);
         // convert u_1_x from BaseField into ScalarField
         u_1.x = vec![ScalarField::from_le_bytes_mod_order(&u_1_x.into_bigint().to_bytes_le())];
 
-        // U_1 is trivial instance (via the paper).
-        // Prover fold u_1 and U_1 into U2.
+        // U_1 is a trivial instance (via the paper).
+        // Prover fold u_1 and U_1 into U_2.
 
-        let ivc_proof = IVCProof{
-            u_i: u_1,
+        // generate IVC proof.
+        ivc_proof = IVCProof{
+            u_i: u_1.clone(),
             w_i: w_1,
-            big_u_i: trivial_instance,
-            big_w_i: trivial_witness,
+            big_u_i: trivial_instance.clone(),
+            big_w_i: trivial_witness.clone(),
         };
-        let zk_ivc_proof = ivc.prove(
+        println!("p: u_i {:?}", u_1);
+        // generate W_2, U_2 and zkIVCProof via IVC proof
+        (folded_witness, folded_instance, zk_ivc_proof) = ivc.prove(
             &r1cs,
             &ivc_proof,
             &mut prover_transcript
         );
 
-
+        println!("Step 2");
         // run F' for the second time
         let res2 = ivc.augmented_circuit.run(
             &ivc_proof.u_i,
@@ -196,18 +237,64 @@ mod tests {
         if res2.is_err() {
             println!("Step: {:?}, {:?}", i, res2);
         }
+        assert!(res2.is_ok());
 
-        // verifier verify the final step
+        // verifier verify this step
         let result = ivc.verify(&zk_ivc_proof, &mut verifier_transcript);
         if result.is_err() {
             println!("{:?}", result);
         }
         assert!(result.is_ok());
 
-
+        // update next step
         ivc.augmented_circuit.next_step();
-        // check if the final state is 108.
+        i = i + BaseField::one();
+        prover_transcript = Transcript::<Sha256>::default();
+        verifier_transcript = Transcript::<Sha256>::default();
+        // check if this state is 108.
         assert_eq!(ivc.augmented_circuit.z_i.state, BaseField::from(108), "Wrong state");
 
+
+        let u_2_x = AugmentedCircuit::<Sha256, TestCircuit>::hash_io(i, &z_0, &z_2, &folded_instance);
+        u_2.x = vec![ScalarField::from_le_bytes_mod_order(&u_2_x.into_bigint().to_bytes_le())];
+        ivc_proof = IVCProof {
+            u_i: u_2,
+            w_i: w_2,
+            big_u_i: folded_instance, // U_2
+            big_w_i: folded_witness // W_2
+        };
+
+        (folded_witness, folded_instance, zk_ivc_proof) = ivc.prove(
+            &r1cs,
+            &ivc_proof,
+            &mut prover_transcript
+        );
+
+        println!("Step 3");
+        // run F' for the last time
+        let res3 = ivc.augmented_circuit.run(
+            &ivc_proof.u_i,
+            Some(&ivc_proof.big_u_i.clone()),
+            &ivc_proof.w_i,
+            Some(&zk_ivc_proof.com_t.clone().unwrap())
+        );
+
+        if res3.is_err() {
+            println!("Step: {:?}, {:?}", i, res3);
+        }
+        assert!(res3.is_ok());
+
+        // verifier verify this step
+        let result = ivc.verify(&zk_ivc_proof, &mut verifier_transcript);
+        if result.is_err() {
+            println!("{:?}", result);
+        }
+        assert!(result.is_ok());
+
+        // update next step
+        ivc.augmented_circuit.next_step();
+        i = i + BaseField::one();
+        // check if this state is 115.
+        assert_eq!(ivc.augmented_circuit.z_i.state, BaseField::from(115), "Wrong state");
     }
 }
