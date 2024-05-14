@@ -8,7 +8,6 @@ use kzg::scheme::KzgScheme;
 use crate::circuit::{AugmentedCircuit, FCircuit};
 use crate::nifs::{NIFSProof};
 use crate::r1cs::{FInstance, FWitness};
-use crate::transcript::Transcript;
 
 /// zero knowledge proof for IVC
 pub struct ZkIVCProof {
@@ -25,9 +24,8 @@ pub struct IVCProof {
     pub big_w_i: FWitness,
 }
 
-pub struct IVC <T: Digest + Default + ark_serialize::Write, F: PrimeField,  FC: FCircuit<F>> {
+pub struct IVC <T: Digest + Default + ark_serialize::Write, FC: FCircuit<>> {
     scheme: KzgScheme,
-    augmented_circuit: AugmentedCircuit<T, F, FC>,
-    ivc_transcript: Transcript<T>,
+    augmented_circuit: AugmentedCircuit<T, FC>,
 }
 
