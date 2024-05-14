@@ -44,7 +44,7 @@ impl FWitness {
         }
     }
 
-    pub fn create_trivial_witness(len: usize) -> Self {
+    pub fn new_trivial_witness(len: usize) -> Self {
         FWitness {
             e: vec![ScalarField::zero(); len],
             w: vec![ScalarField::zero(); len],
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     pub fn test_r1cs() {
-        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(2);
+        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4]);
         let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
 
         // Trusted setup
