@@ -27,6 +27,7 @@ pub struct FInstance {
 
 /// Create Committed Relaxed FWitness with KZG commitment
 /// Todo: Need to implement a general-curve commitment
+#[derive(Debug, Clone)]
 pub struct FWitness {
     pub e: Vec<ScalarField>,
     // pub rE: ScalarField,

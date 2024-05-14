@@ -62,7 +62,7 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
 
             // get hash_x
             let hash_x = self.hash_x.clone().unwrap();
-
+            println!("c: hash_x: {:?}", hash_x);
             // 1. check that u.x =? hash_x
             // Because u_i.x is in ScalarField while hash_x is in BaseField, they need to
             // be converted into a comparable type
@@ -71,6 +71,8 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             let u_dot_x = u_i.x[0].clone();
             let hash_fr = ScalarField::from_le_bytes_mod_order(&hash_x.into_bigint().to_bytes_le());
             if u_dot_x != hash_fr {
+                println!("u_dot_x: {:?}", u_dot_x);
+                println!("hash_fr: {:?}", hash_fr);
                 return Err(String::from("Public IO is wrong "));
             }
 
@@ -89,6 +91,9 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             transcript.feed_scalar_num(big_u_i.unwrap().u);
             transcript.feed(com_t.unwrap());
             let [r] = transcript.generate_challenges();
+            if self.i == BaseField::one() {
+                println!("c: r is: {:?}", r);
+            }
 
             // 3.compute U_{i+1}
             let big_u_i1 = NIFS::<T>::verifier(r, u_i, big_u_i.unwrap(), com_t.unwrap());
