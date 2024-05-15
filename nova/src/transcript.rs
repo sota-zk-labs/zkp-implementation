@@ -42,6 +42,15 @@ impl<T: Digest + Default> Transcript<T> {
         challenge_parse
     }
 
+    /// Creates a new `Transcript` instance from a list of scalar number
+    ///
+    /// # Parameters
+    ///
+    /// - `kzg_commitment`: A slice containing the commitments.
+    ///
+    /// # Returns
+    ///
+    /// A new `Transcript` instance.
     pub fn from_scalar_number(numbers: &[ScalarField]) -> Self {
         let mut challenge_parse = Self::default();
         for number in numbers {

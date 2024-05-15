@@ -26,14 +26,22 @@ pub trait FCircuit {
 
 /// F' circuit
 pub struct AugmentedCircuit<T: Digest + Default + ark_serialize::Write, FC: FCircuit> {
+    // F function
     pub f_circuit: FC,
+    // i is the step of IVC
     pub i: BaseField,
-    pub trivial_instance: FInstance, // trivial instance.
+    // trivial instance u⊥
+    pub trivial_instance: FInstance,
+    // The initial state z_0
     pub z_0: State,
-    pub z_i1: Option<State>, // store the next state, use for update step.
+    // The current state
     pub z_i: State,
-    pub hash_x: Option<BaseField>,
-    pub hash_x_next: Option<BaseField>, // store the next hash IO, use for update step
+    // The next state z_{i+1} = F(z_i, w_i).
+    pub z_i1: Option<State>,
+    // h_i = hash(i, z0, zi, Ui)
+    pub h_i: Option<BaseField>,
+    // store the next hash IO: h_{i+1} = hash(i + 1, z0, z{i+1}, U{i+1})
+    pub h_i1: Option<BaseField>,
     pub phantom_data_t: PhantomData<T>,
 }
 
@@ -52,8 +60,8 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             z_0: z_0.clone(),
             z_i: z_0.clone(),
             z_i1: None,
-            hash_x: None,
-            hash_x_next: None,
+            h_i: None,
+            h_i1: None,
             phantom_data_t: PhantomData
         }
     }
@@ -73,12 +81,12 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             }
 
             // check that if i > 0 then the hash_x must exist
-            if self.hash_x.is_none() {
+            if self.h_i.is_none() {
                 return Err(String::from("The hash public IO must exist"))
             }
 
             // get hash_x
-            let hash_x = self.hash_x.clone().unwrap();
+            let hash_x = self.h_i.clone().unwrap();
 
             // 1. check that u.x =? hash_x
             // Because u_i.x is in ScalarField while hash_x is in BaseField, they need to
@@ -117,7 +125,7 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             let new_hash= Self::hash_io(self.i.add(BaseField::one()), &self.z_0, &z_i1, &big_u_i1);
 
             // store the next hash
-            self.hash_x_next = Some(new_hash);
+            self.h_i1 = Some(new_hash);
             // store the next state
             self.z_i1 = Some(z_i1);
 
@@ -130,39 +138,41 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             let new_hash = Self::hash_io(BaseField::one(), &self.z_0, &z_i1, &self.trivial_instance);
 
             // store the next hash
-            self.hash_x_next = Some(new_hash);
+            self.h_i1 = Some(new_hash);
             // store the next state
             self.z_i1 = Some(z_i1);
         }
 
-        return Ok(self.hash_x_next.unwrap());
+        // 4. output the hash
+        return Ok(self.h_i1.unwrap());
     }
 
+    /// updating F' function for the next step of IVC.
     pub fn next_step(&mut self) {
         self.z_i = self.z_i1.clone().unwrap();
         self.z_i1 = None;
         self.i = self.i + BaseField::one();
-        self.hash_x = self.hash_x_next;
-        self.hash_x_next = None;
+        self.h_i = self.h_i1;
+        self.h_i1 = None;
     }
 
-    /// A function compute public IO of an instance: u.x = hash(i, z0, zi, Ui).
+    /// A function computes public IO of an instance: u.x = hash(i, z0, zi, Ui).
     pub fn hash_io(
         i: BaseField,
         z_0: &State,
         z_i: &State,
-        big_u: &FInstance
+        big_u_i: &FInstance
     ) -> BaseField {
         let mut hasher = T::default();
         i.serialize_uncompressed(&mut hasher).unwrap();
         z_0.state.serialize_uncompressed(&mut hasher).unwrap();
         z_i.state.serialize_uncompressed(&mut hasher).unwrap();
 
-        big_u.com_e.0.serialize_uncompressed(&mut hasher).unwrap();
-        big_u.u.serialize_uncompressed(&mut hasher).unwrap();
-        big_u.com_w.0.serialize_uncompressed(&mut hasher).unwrap();
+        big_u_i.com_e.0.serialize_uncompressed(&mut hasher).unwrap();
+        big_u_i.u.serialize_uncompressed(&mut hasher).unwrap();
+        big_u_i.com_w.0.serialize_uncompressed(&mut hasher).unwrap();
 
-        for x in &big_u.x {
+        for x in &big_u_i.x {
             x.serialize_uncompressed(&mut hasher).unwrap();
         }
 
@@ -228,8 +238,8 @@ mod test {
             z_0: z_0.clone(),
             z_i: z_0.clone(),
             z_i1: None,
-            hash_x: None,
-            hash_x_next: None,
+            h_i: None,
+            h_i1: None,
             phantom_data_t: PhantomData
         };
 
@@ -294,8 +304,8 @@ mod test {
             z_0: z_0.clone(),
             z_i: z_1.clone(),
             z_i1: None,
-            hash_x: Some(u_1_x),
-            hash_x_next: None,
+            h_i: Some(u_1_x),
+            h_i1: None,
             phantom_data_t: PhantomData
         };
 
@@ -364,8 +374,8 @@ mod test {
             z_0: z_0.clone(),
             z_i: z_1.clone(),
             z_i1: None,
-            hash_x: Some(u_1_x),
-            hash_x_next: None,
+            h_i: Some(u_1_x),
+            h_i1: None,
             phantom_data_t: PhantomData
         };
 

@@ -45,6 +45,7 @@ impl FWitness {
         }
     }
 
+    /// Create a trivial witness, where E, W, and x are appropriately-sized zero vectors.
     pub fn new_trivial_witness(len: usize) -> Self {
         FWitness {
             e: vec![ScalarField::zero(); len],
@@ -52,6 +53,7 @@ impl FWitness {
         }
     }
 
+    /// Commit a witness into its corresponding instance.
     pub fn commit(&self, scheme: &KzgScheme, x: &Vec<ScalarField>) -> FInstance {
         let com_e = scheme.commit_vector(&self.e);
         // cE.0 = cE.0.mul(self.rE).into_affine();
@@ -67,7 +69,9 @@ impl FWitness {
     }
 }
 
-#[allow(dead_code)]
+/// This function is used for testing only, which creates a trivial
+/// instance-witness pair
+#[cfg(test)]
 pub fn create_trivial_pair(
     x_len: usize,
     w_len: usize,
@@ -79,6 +83,8 @@ pub fn create_trivial_pair(
     (trivial_witness, trivial_instance)
 }
 
+/// Check that whether the witness and instance are satisfied R1CS.
+/// (A ·Z) ◦ (B ·Z) = u ·(C ·Z) + E
 #[allow(dead_code)]
 pub fn is_r1cs_satisfied(
     r1cs: &R1CS<ScalarField>,
@@ -121,7 +127,6 @@ pub fn is_r1cs_satisfied(
 
 
 #[cfg(test)]
-
 mod tests {
     use kzg::scheme::KzgScheme;
     use kzg::srs::Srs;

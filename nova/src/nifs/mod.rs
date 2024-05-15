@@ -12,6 +12,9 @@ use crate::utils::{hadamard_product, matrix_vector_product, vec_add, vec_sub, ve
 pub(crate) mod nifs_verifier;
 mod nifs_prover;
 
+
+/// NIFS Proof is a zk proof. To convince the verifier, prover creates an opening
+/// for each E and W.
 #[derive(Clone)]
 pub struct NIFSProof {
     pub r: ScalarField,
@@ -27,6 +30,7 @@ pub struct NIFS<T: Digest + Default> {
 impl <T: Digest + Default> NIFS<T> {
 
     /// Compute the cross-term T
+    /// T = AZ1 ◦ BZ2 + AZ2 ◦ BZ1 − u1 · CZ2 − u2 · CZ1.
     pub fn compute_t(
         r1cs: &R1CS<ScalarField>,
         u1: ScalarField,
@@ -54,6 +58,9 @@ impl <T: Digest + Default> NIFS<T> {
         t
     }
 
+    /// Fold two witnesses into one.
+    /// E ← E1 + r · T + r^2 · E2
+    /// W ← W1 + r · W2
     pub fn fold_witness(
         r: ScalarField,
         fw1: &FWitness,
@@ -76,6 +83,11 @@ impl <T: Digest + Default> NIFS<T> {
         }
     }
 
+    /// Fold two instances into one.
+    /// com_E ← com_E1 + r · com_T + r^2· com_E2
+    /// u ← u1 + r · u2
+    /// com_W ← com_W1 + r · com_W2
+    /// x ← x1 + r · x2
     pub fn fold_instance(
         r: ScalarField,
         fi1: &FInstance,
