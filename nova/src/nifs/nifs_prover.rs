@@ -64,3 +64,46 @@ impl <T: Digest + Default> NIFS<T> {
         }
     }
 }
+
+#[cfg(test)]
+
+mod test {
+    use sha2::Sha256;
+    use kzg::srs::Srs;
+    use crate::nifs::nifs_verifier::gen_test_values;
+    use crate::r1cs::is_r1cs_satisfied;
+    use super::*;
+
+    #[test]
+    pub fn test_prover_folding() {
+        // generate R1CS, witnesses and public input, output.
+        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4]);
+        let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
+
+        // Trusted setup
+        let domain_size = witnesses[0].len() + x[0].len() + 1;
+        let srs = Srs::new(domain_size);
+        let scheme = KzgScheme::new(srs);
+
+        // Generate witnesses and instances
+        let w: Vec<FWitness> = witnesses.iter().map(|witness| FWitness::new(witness, matrix_a.len())).collect();
+        let u: Vec<FInstance> = w.iter().zip(x).map(|(w, x)| w.commit(&scheme, &x)).collect();
+
+        let mut transcript = Transcript::<Sha256>::default();
+
+        let (folded_witness, folded_instance, _, _) = NIFS::<Sha256>::prover(
+            &r1cs,
+            &w[0], &w[1],
+            &u[0], &u[1],
+            &scheme,
+            &mut transcript
+        );
+
+        let ok = is_r1cs_satisfied(&r1cs,&folded_instance, &folded_witness, &scheme);
+
+        if ok.is_err() {
+            println!("{:?}", ok);
+        }
+        assert!(ok.is_ok());
+    }
+}

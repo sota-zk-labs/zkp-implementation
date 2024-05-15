@@ -1,7 +1,6 @@
 mod ivc_prover;
 mod ivc_verifier;
 
-use ark_ff::PrimeField;
 use sha2::Digest;
 use kzg::commitment::KzgCommitment;
 use kzg::scheme::KzgScheme;
@@ -24,6 +23,7 @@ pub struct IVCProof {
     pub big_w_i: FWitness,
 }
 
+#[allow(dead_code)]
 impl IVCProof {
 
     pub fn new(
@@ -53,6 +53,7 @@ impl IVCProof {
     }
 }
 
+#[allow(dead_code)]
 impl ZkIVCProof {
     pub fn trivial_zk_ivc_proof(
         trivial_instance: &FInstance,
@@ -68,7 +69,7 @@ impl ZkIVCProof {
 }
 
 pub struct IVC <T: Digest + Default + ark_serialize::Write, FC: FCircuit<>> {
-    scheme: KzgScheme,
-    augmented_circuit: AugmentedCircuit<T, FC>,
+    pub(crate) scheme: KzgScheme,
+    pub(crate) augmented_circuit: AugmentedCircuit<T, FC>,
 }
 

@@ -85,8 +85,8 @@ impl <T: Digest + Default> NIFS<T> {
         let new_com_e = KzgCommitment((fi1.com_e.0 + com_t.0.mul(r) + fi2.com_e.0.mul(r * r)).into_affine());
         let new_com_w = KzgCommitment((fi1.com_w.0 + fi2.com_w.0.mul(r)).into_affine());
 
-        let new_u = fi1.u + fi1.u * r;
-        let new_x = fi1.x.iter().zip(&fi1.x).map(|(a, b)| {
+        let new_u = fi1.u + fi2.u * r;
+        let new_x = fi1.x.iter().zip(&fi2.x).map(|(a, b)| {
             *a + *b * r
         }).collect();
 

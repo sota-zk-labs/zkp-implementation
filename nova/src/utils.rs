@@ -1,5 +1,5 @@
 use ark_ff::PrimeField;
-
+#[allow(dead_code)]
 pub fn matrix_vector_product<F: PrimeField>(matrix: &Vec<Vec<F>>, z: &Vec<F>) -> Vec<F> {
     let mut r: Vec<F> = vec![F::zero(); matrix.len()];
     for i in 0..matrix.len() {
@@ -9,6 +9,8 @@ pub fn matrix_vector_product<F: PrimeField>(matrix: &Vec<Vec<F>>, z: &Vec<F>) ->
     }
     r
 }
+
+#[allow(dead_code)]
 pub fn hadamard_product<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
 
     let mut r: Vec<F> = vec![F::zero(); a.len()];
@@ -18,6 +20,7 @@ pub fn hadamard_product<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     r
 }
 
+#[allow(dead_code)]
 pub fn vector_elem_product<F: PrimeField>(a: &Vec<F>, u: F) -> Vec<F> {
     let mut r: Vec<F> = vec![F::zero(); a.len()];
     for i in 0..a.len() {
@@ -26,6 +29,7 @@ pub fn vector_elem_product<F: PrimeField>(a: &Vec<F>, u: F) -> Vec<F> {
     r
 }
 
+#[allow(dead_code)]
 pub fn vec_sub<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     assert_eq!(a.len(), b.len());
     let mut r: Vec<F> = vec![F::zero(); a.len()];
@@ -35,6 +39,7 @@ pub fn vec_sub<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     r
 }
 
+#[allow(dead_code)]
 pub fn vec_add<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     assert_eq!(a.len(), b.len());
     let mut r: Vec<F> = vec![F::zero(); a.len()];
@@ -44,6 +49,7 @@ pub fn vec_add<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     r
 }
 
+#[allow(dead_code)]
 pub fn vec_equal<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> bool {
     if a.len() != b.len() {
         return false;
@@ -57,6 +63,7 @@ pub fn vec_equal<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> bool {
     true
 }
 
+#[allow(dead_code)]
 pub fn to_f_matrix<F: PrimeField> (matrix: Vec<Vec<usize>>) -> Vec<Vec<F>> {
     let mut r: Vec<Vec<F>> = vec![Vec::new(); matrix.len()];
     for i in 0..matrix.len() {
@@ -68,6 +75,7 @@ pub fn to_f_matrix<F: PrimeField> (matrix: Vec<Vec<usize>>) -> Vec<Vec<F>> {
     r
 }
 
+#[allow(dead_code)]
 pub fn to_f_vec<F: PrimeField>(z: Vec<usize>) -> Vec<F> {
     let mut r: Vec<F> = vec![F::zero(); z.len()];
     for i in 0..z.len() {

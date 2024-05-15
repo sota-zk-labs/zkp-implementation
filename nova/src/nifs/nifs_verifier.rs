@@ -92,27 +92,28 @@ impl <T: Digest + Default> NIFS<T> {
     }
 }
 
+#[allow(dead_code)]
 pub fn gen_test_values<F: PrimeField>(inputs: Vec<usize>) -> (R1CS<F>, Vec<Vec<F>>, Vec<Vec<F>>) {
     // R1CS for: x^3 + x + 5 = y (example from article
     // https://vitalik.eth.limo/general/2016/12/10/qap.html )
 
     let a = to_f_matrix::<F>(vec![
+        vec![1, 0, 0, 0, 0, 0],
         vec![0, 1, 0, 0, 0, 0],
-        vec![0, 0, 0, 1, 0, 0],
-        vec![0, 1, 0, 0, 1, 0],
-        vec![5, 0, 0, 0, 0, 1],
+        vec![1, 0, 1, 0, 0, 0],
+        vec![0, 0, 0, 1, 0, 5],
     ]);
     let b = to_f_matrix::<F>(vec![
-        vec![0, 1, 0, 0, 0, 0],
-        vec![0, 1, 0, 0, 0, 0],
         vec![1, 0, 0, 0, 0, 0],
         vec![1, 0, 0, 0, 0, 0],
+        vec![0, 0, 0, 0, 0, 1],
+        vec![0, 0, 0, 0, 0, 1],
     ]);
     let c = to_f_matrix::<F>(vec![
+        vec![0, 1, 0, 0, 0, 0],
+        vec![0, 0, 1, 0, 0, 0],
         vec![0, 0, 0, 1, 0, 0],
         vec![0, 0, 0, 0, 1, 0],
-        vec![0, 0, 0, 0, 0, 1],
-        vec![0, 0, 1, 0, 0, 0],
     ]);
 
     // generate n witnesses
@@ -120,26 +121,24 @@ pub fn gen_test_values<F: PrimeField>(inputs: Vec<usize>) -> (R1CS<F>, Vec<Vec<F
     let mut x: Vec<Vec<F>> = Vec::new();
     for input in inputs {
         let w_i = to_f_vec::<F>(vec![
-            1,
             input,
-            input * input * input + input + 5, // x^3 + x + 5
             input * input,                     // x^2
             input * input * input,             // x^2 * x
             input * input * input + input,     // x^3 + x
         ]);
         w.push(w_i.clone());
-        let x_i = to_f_vec::<F>(vec![input * input * input + input + 5]);
+        let x_i = to_f_vec::<F>(vec![input * input * input + input + 5]);  // output: x^3 + x + 5
         x.push(x_i.clone());
     }
     // println!("w: {:?}", w);
     // println!("x: {:?}", x);
 
-    let r1cs = R1CS::<F> { matrix_a: a, matrix_b: b, matrix_c: c, num_io: 1, num_vars: 6 };
+    let r1cs = R1CS::<F> { matrix_a: a, matrix_b: b, matrix_c: c, num_io: 1, num_vars: 4 };
     (r1cs, w, x)
 }
 
 #[cfg(test)]
-
+#[allow(dead_code)]
 mod tests {
     use super::*;
     use sha2::Sha256;
@@ -160,6 +159,7 @@ mod tests {
         let mut prover_transcript = Transcript::<Sha256>::default();
         let mut verifier_transcript = Transcript::<Sha256>::default();
 
+        // generate witnesses and instances
         let fw1 = FWitness::new(&witnesses[0], matrix_a.len());
         let fw2 = FWitness::new(&witnesses[1], matrix_a.len());
 

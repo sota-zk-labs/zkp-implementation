@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use ark_bls12_381::Fr;
-use ark_ff::{PrimeField, UniformRand};
+use ark_ff::{UniformRand};
 use ark_serialize::{CanonicalSerialize, Write};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -23,6 +23,7 @@ pub struct Transcript<T: Digest + Default> {
     _phantom_data_t: PhantomData<T>,
 }
 
+#[allow(dead_code)]
 impl<T: Digest + Default> Transcript<T> {
     /// Creates a new `Transcript` instance from a list of commitments.
     ///
