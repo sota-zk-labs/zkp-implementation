@@ -34,7 +34,7 @@ pub struct FWitness {
     pub w: Vec<ScalarField>,
     // pub rW: ScalarField,
 }
-
+#[allow(dead_code)]
 impl FWitness {
     pub fn new(w: &Vec<ScalarField>, len: usize) -> Self {
         FWitness {
@@ -67,6 +67,7 @@ impl FWitness {
     }
 }
 
+#[allow(dead_code)]
 pub fn create_trivial_pair(
     x_len: usize,
     w_len: usize,
@@ -78,11 +79,12 @@ pub fn create_trivial_pair(
     (trivial_witness, trivial_instance)
 }
 
-pub fn is_satis_relaxed(
-    r1cs: R1CS<ScalarField>,
-    f_instance: FInstance,
-    f_witness: FWitness,
-    scheme: KzgScheme
+#[allow(dead_code)]
+pub fn is_r1cs_satisfied(
+    r1cs: &R1CS<ScalarField>,
+    f_instance: &FInstance,
+    f_witness: &FWitness,
+    scheme: &KzgScheme
 ) -> Result<(), String> {
     if r1cs.num_vars != f_witness.w.len() {
         return Err(String::from("Witness does not match with matrices"));
@@ -125,10 +127,12 @@ mod tests {
     use kzg::srs::Srs;
     use kzg::types::ScalarField;
     use crate::nifs::nifs_verifier::gen_test_values;
+    use crate::r1cs::{FInstance, FWitness, is_r1cs_satisfied};
 
     #[test]
-    pub fn test_r1cs() {
-        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4]);
+    pub fn test_r1cs_satisfaction_condition() {
+        // generate R1CS, witnesses and public input, output.
+        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3]);
         let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
 
         // Trusted setup
@@ -136,6 +140,15 @@ mod tests {
         let srs = Srs::new(domain_size);
         let scheme = KzgScheme::new(srs);
 
+        // Generate witnesses and instances
+        let w: Vec<FWitness> = witnesses.iter().map(|witness| FWitness::new(witness, matrix_a.len())).collect();
+        let u: Vec<FInstance> = w.iter().zip(x).map(|(w, x)| w.commit(&scheme, &x)).collect();
 
+        let ok = is_r1cs_satisfied(&r1cs,&u[0], &w[0], &scheme);
+
+        if ok.is_err() {
+            println!("{:?}", ok);
+        }
+        assert!(ok.is_ok());
     }
 }

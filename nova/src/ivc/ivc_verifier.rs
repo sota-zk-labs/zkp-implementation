@@ -1,11 +1,12 @@
 use ark_ff::{BigInteger, One, PrimeField, Zero};
 use sha2::Digest;
 use kzg::types::{BaseField, ScalarField};
-use crate::circuit::{AugmentedCircuit, FCircuit, State};
+use crate::circuit::{AugmentedCircuit, FCircuit};
 use crate::ivc::{IVC, ZkIVCProof};
 use crate::nifs::NIFS;
 use crate::transcript::Transcript;
 
+#[allow(dead_code)]
 impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit> IVC <T, FC> {
     pub fn verify(
         &mut self,
@@ -69,7 +70,7 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit> IVC <T, FC> {
 }
 
 #[cfg(test)]
-
+#[allow(dead_code)]
 mod tests {
     use std::marker::PhantomData;
     use sha2::Sha256;
@@ -80,11 +81,11 @@ mod tests {
     use super::*;
     use crate::r1cs::{create_trivial_pair, FInstance, FWitness};
     use crate::transcript::Transcript;
-
+    use crate::circuit::State;
     struct TestCircuit {}
     impl FCircuit for TestCircuit {
         fn run(&self, z_i: &State, w_i: &FWitness) -> State {
-            let x = w_i.w[1].clone();
+            let x = w_i.w[0].clone();
             let res = x * x * x + x + ScalarField::from(5);
             // because res is in scalar field, we need to convert it into base_field
             let base_res = BaseField::from_le_bytes_mod_order(&res.into_bigint().to_bytes_le());
@@ -96,7 +97,118 @@ mod tests {
     }
 
     #[test]
-    fn test_ivc_step_by_step_1() {
+    fn test_ivc() {
+        // This test:  (x0^3 + x0 + 5) + (x1^3 + x1 + 5) + (x2^3 + x2 + 5) + (x3^3 + x2 + 5) = 130
+        // x0 = 3, x1 = 4, x2 = 1, x3 = 2
+
+        // generate R1CS, witnesses and public input, output.
+        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4, 1, 2]);
+        let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
+
+        // Trusted setup
+        let domain_size = witnesses[0].len() + x[0].len() + 1;
+        let srs = Srs::new(domain_size);
+        let scheme = KzgScheme::new(srs);
+        let x_len = x[0].len();
+
+        // Generate witnesses and instances
+        let w: Vec<FWitness> = witnesses.iter().map(|witness| FWitness::new(witness, matrix_a.len())).collect();
+        let mut u: Vec<FInstance> = w.iter().zip(x).map(|(w, x)| w.commit(&scheme, &x)).collect();
+
+        // step i
+        let mut i = BaseField::zero();
+
+        // generate trivial instance-witness pair
+        let (trivial_witness, trivial_instance) = create_trivial_pair(x_len, witnesses[0].len(), &scheme);
+
+        // generate f_circuit instance
+        let f_circuit = TestCircuit{};
+
+        // generate states
+        let mut z = vec![State{state: BaseField::from(0)}; 5];
+        for index in 1..5 {
+            z[index] = f_circuit.run(&z[index - 1], &w[index-1]);
+        }
+
+        let mut prover_transcript;
+        let mut verifier_transcript = Transcript::<Sha256>::default();
+
+
+        // create F'
+        let augmented_circuit = AugmentedCircuit::<Sha256, TestCircuit>::new(
+            f_circuit,
+            &trivial_instance,
+            &z[0]
+        );
+
+        // generate IVC
+        let mut ivc = IVC::<Sha256, TestCircuit> {
+            scheme,
+            augmented_circuit
+        };
+
+        // initialize IVC proof, zkIVCProof, folded witness and folded instance
+        let mut ivc_proof = IVCProof::trivial_ivc_proof(&trivial_instance, &trivial_witness);
+        let mut zk_ivc_proof = ZkIVCProof::trivial_zk_ivc_proof(&trivial_instance);
+        let mut folded_witness = trivial_witness.clone();
+        let mut folded_instance = trivial_instance.clone();
+
+        let mut res;
+        for step in 0..4 {
+
+            println!("Step: {:?}", step);
+
+            if step == 0 {
+                res = ivc.augmented_circuit.run(
+                    &u[step],
+                    None,
+                    &w[step],
+                    None,
+                );
+            } else {
+                res = ivc.augmented_circuit.run(
+                    &ivc_proof.u_i,
+                    Some(&ivc_proof.big_u_i.clone()),
+                    &ivc_proof.w_i,
+                    Some(&zk_ivc_proof.com_t.clone().unwrap())
+                );
+            }
+
+            if res.is_err() {
+                println!("{:?}", res);
+            }
+            assert!(res.is_ok());
+
+            // verifier verify this step
+            let verify = ivc.verify(&zk_ivc_proof, &mut verifier_transcript);
+            if verify.is_err() {
+                println!("{:?}", verify);
+            }
+            assert!(verify.is_ok());
+
+            // update for next step
+
+            if step != 3 { // do not update if we have done with IVC
+                ivc.augmented_circuit.next_step();
+                i = i + BaseField::one();
+                assert_eq!(ivc.augmented_circuit.z_i.state, z[step + 1].state);
+                prover_transcript = Transcript::<Sha256>::default();
+                verifier_transcript = Transcript::<Sha256>::default();
+
+                let hash_x = AugmentedCircuit::<Sha256, TestCircuit>::hash_io(i, &z[0], &z[step + 1], &folded_instance);
+                // convert u_1_x from BaseField into ScalarField
+                u[step + 1].x = vec![ScalarField::from_le_bytes_mod_order(&hash_x.into_bigint().to_bytes_le())];
+
+                // generate ivc_proof and zkSNARK proof.
+                ivc_proof = IVCProof::new(&u[step + 1], &w[step + 1], &folded_instance, &folded_witness);
+                (folded_witness, folded_instance, zk_ivc_proof) = ivc.prove(&r1cs, &ivc_proof, &mut prover_transcript);
+            }
+        }
+    }
+
+    #[test]
+    #[allow(dead_code)]
+    fn test_ivc_step_by_step() {
         // This test:  (x0^3 + x0 + 5) + (x1^3 + x1 + 5) + (x2^3 + x2 + 5)= 115
         // x0 = 3, x1 = 4, x2 = 1
 
@@ -133,11 +245,11 @@ mod tests {
         let z_1 = f_circuit.run(&z_0, &w_0);
         let z_2 = f_circuit.run(&z_1, &w_1);
 
-        let mut prover_transcript = Transcript::<Sha256>::default();
+        let mut prover_transcript;
         let mut verifier_transcript = Transcript::<Sha256>::default();
 
         // create F'
-        let mut augmented_circuit = AugmentedCircuit::<Sha256, TestCircuit> {
+        let augmented_circuit = AugmentedCircuit::<Sha256, TestCircuit> {
             f_circuit,
             i: BaseField::zero(),
             trivial_instance: trivial_instance.clone(),
@@ -155,7 +267,7 @@ mod tests {
             augmented_circuit
         };
 
-        // initialize IVC proof, zkIVCProof, folded witness and folded instance
+        // initialize IVC proof, zkIVCProof, folded witness (W) and folded instance (U)
         let mut ivc_proof = IVCProof {
             w_i: trivial_witness.clone(),
             u_i: trivial_instance.clone(),
@@ -164,14 +276,15 @@ mod tests {
         };
 
         let mut zk_ivc_proof = ZkIVCProof {
-            u_i: trivial_instance.clone(),
-            big_u_i: trivial_instance.clone(),
+            u_i: ivc_proof.u_i,
+            big_u_i: ivc_proof.big_u_i,
             com_t: None,
             folded_u_proof: None,
         };
 
-        let mut folded_witness = trivial_witness.clone();
-        let mut folded_instance = trivial_instance.clone();
+
+        let folded_witness;
+        let folded_instance;
 
         println!("Step 1");
         // run F' for the first time
@@ -264,7 +377,8 @@ mod tests {
             big_w_i: folded_witness // W_2
         };
 
-        (folded_witness, folded_instance, zk_ivc_proof) = ivc.prove(
+        // Compute W_3, U_3, and zkSNARK proof
+        (_, _, zk_ivc_proof) = ivc.prove(
             &r1cs,
             &ivc_proof,
             &mut prover_transcript
@@ -293,119 +407,7 @@ mod tests {
 
         // update next step
         ivc.augmented_circuit.next_step();
-        i = i + BaseField::one();
         // check if this state is 115.
         assert_eq!(ivc.augmented_circuit.z_i.state, BaseField::from(115), "Wrong state");
-    }
-
-    #[test]
-    fn test_ivc_2() {
-        // This test:  (x0^3 + x0 + 5) + (x1^3 + x1 + 5) + (x2^3 + x2 + 5) + (x3^3 + x2 + 5) = 130
-        // x0 = 3, x1 = 4, x2 = 1, x3 = 2
-
-        // generate R1CS, witnesses and public input, output.
-        let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4, 1, 2]);
-        let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
-
-        // Trusted setup
-        let domain_size = witnesses[0].len() + x[0].len() + 1;
-        let srs = Srs::new(domain_size);
-        let scheme = KzgScheme::new(srs);
-        let x_len = x[0].len();
-
-        // Generate witnesses and instances
-        let w: Vec<FWitness> = witnesses.iter().map(|witness| FWitness::new(witness, matrix_a.len())).collect();
-        let mut u: Vec<FInstance> = w.iter().zip(x).map(|(w, x)| w.commit(&scheme, &x)).collect();
-
-        // step i
-        let mut i = BaseField::zero();
-
-        // generate trivial instance-witness pair
-        let (trivial_witness, trivial_instance) = create_trivial_pair(x_len, witnesses[0].len(), &scheme);
-
-        // generate f_circuit instance
-        let f_circuit = TestCircuit{};
-
-
-        // generate states
-        let mut z = vec![State{state: BaseField::from(0)}; 5];
-        for index in 1..5 {
-            z[index] = f_circuit.run(&z[index - 1], &w[index-1]);
-        }
-
-        let mut prover_transcript = Transcript::<Sha256>::default();
-        let mut verifier_transcript = Transcript::<Sha256>::default();
-
-
-        // create F'
-        let mut augmented_circuit = AugmentedCircuit::<Sha256, TestCircuit>::new(
-            f_circuit,
-            &trivial_instance,
-            &z[0]
-        );
-
-        // generate IVC
-        let mut ivc = IVC::<Sha256, TestCircuit> {
-            scheme,
-            augmented_circuit
-        };
-
-        // initialize IVC proof, zkIVCProof, folded witness and folded instance
-        let mut ivc_proof = IVCProof::trivial_ivc_proof(&trivial_instance, &trivial_witness);
-        let mut zk_ivc_proof = ZkIVCProof::trivial_zk_ivc_proof(&trivial_instance);
-        let mut folded_witness = trivial_witness.clone();
-        let mut folded_instance = trivial_instance.clone();
-
-        let mut res= Ok(BaseField::one());
-        for step in 0..4 {
-
-            println!("Step: {:?}", step);
-
-            if step == 0 {
-                res = ivc.augmented_circuit.run(
-                    &u[step],
-                    None,
-                    &w[step],
-                    None,
-                );
-            } else {
-                res = ivc.augmented_circuit.run(
-                    &ivc_proof.u_i,
-                    Some(&ivc_proof.big_u_i.clone()),
-                    &ivc_proof.w_i,
-                    Some(&zk_ivc_proof.com_t.clone().unwrap())
-                );
-            }
-
-            if res.is_err() {
-                println!("{:?}", res);
-            }
-            assert!(res.is_ok());
-
-            // verifier verify this step
-            let verify = ivc.verify(&zk_ivc_proof, &mut verifier_transcript);
-            if verify.is_err() {
-                println!("{:?}", verify);
-            }
-            assert!(verify.is_ok());
-
-            // update for next step
-
-            if step != 3 { // do not update if we have done with IVC
-                ivc.augmented_circuit.next_step();
-                i = i + BaseField::one();
-                assert_eq!(ivc.augmented_circuit.z_i.state, z[step + 1].state);
-                prover_transcript = Transcript::<Sha256>::default();
-                verifier_transcript = Transcript::<Sha256>::default();
-
-                let hash_x = AugmentedCircuit::<Sha256, TestCircuit>::hash_io(i, &z[0], &z[step + 1], &folded_instance);
-                // convert u_1_x from BaseField into ScalarField
-                u[step + 1].x = vec![ScalarField::from_le_bytes_mod_order(&hash_x.into_bigint().to_bytes_le())];
-
-                ivc_proof = IVCProof::new(&u[step + 1], &w[step + 1], &folded_instance, &folded_witness);
-                (folded_witness, folded_instance, zk_ivc_proof) = ivc.prove(&r1cs, &ivc_proof, &mut prover_transcript);
-            }
-
-        }
     }
 }

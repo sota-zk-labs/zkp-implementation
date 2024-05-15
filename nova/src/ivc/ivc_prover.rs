@@ -7,6 +7,7 @@ use crate::nifs::NIFS;
 use crate::r1cs::{FInstance, FWitness, R1CS};
 use crate::transcript::Transcript;
 
+#[allow(dead_code)]
 impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > IVC <T, FC> {
     pub fn prove(
         &self,
