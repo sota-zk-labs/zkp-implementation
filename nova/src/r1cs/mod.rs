@@ -67,6 +67,17 @@ impl FWitness {
     }
 }
 
+pub fn create_trivial_pair(
+    x_len: usize,
+    w_len: usize,
+    scheme: &KzgScheme)
+-> (FWitness, FInstance){
+    let trivial_x = vec![ScalarField::from(0); x_len];
+    let trivial_witness = FWitness::new_trivial_witness(w_len);
+    let trivial_instance = trivial_witness.commit(&scheme, &trivial_x);
+    (trivial_witness, trivial_instance)
+}
+
 pub fn is_satis_relaxed(
     r1cs: R1CS<ScalarField>,
     f_instance: FInstance,
