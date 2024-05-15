@@ -1,4 +1,15 @@
 use ark_ff::PrimeField;
+
+/// Computes the product of a matrix and a vector.
+///
+/// # Arguments
+///
+/// * `matrix` - A matrix represented as a vector of vectors.
+/// * `z` - A vector to be multiplied by the matrix.
+///
+/// # Returns
+///
+/// A vector resulting from the product of the matrix and the vector.
 #[allow(dead_code)]
 pub fn matrix_vector_product<F: PrimeField>(matrix: &Vec<Vec<F>>, z: &Vec<F>) -> Vec<F> {
     let mut r: Vec<F> = vec![F::zero(); matrix.len()];
@@ -10,6 +21,16 @@ pub fn matrix_vector_product<F: PrimeField>(matrix: &Vec<Vec<F>>, z: &Vec<F>) ->
     r
 }
 
+/// Computes the Hadamard product of two vectors of equal size.
+///
+/// # Arguments
+///
+/// * `a` - The first vector.
+/// * `b` - The second vector.
+///
+/// # Returns
+///
+/// A vector resulting from the Hadamard product of the two input vectors.
 #[allow(dead_code)]
 pub fn hadamard_product<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
 
@@ -20,6 +41,16 @@ pub fn hadamard_product<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     r
 }
 
+/// Computes the product of an element and a vector.
+///
+/// # Arguments
+///
+/// * `a` - The vector.
+/// * `u` - The element to be multiplied with the vector.
+///
+/// # Returns
+///
+/// A vector resulting from multiplying each element of `a` by `u`.
 #[allow(dead_code)]
 pub fn vector_elem_product<F: PrimeField>(a: &Vec<F>, u: F) -> Vec<F> {
     let mut r: Vec<F> = vec![F::zero(); a.len()];
@@ -29,6 +60,16 @@ pub fn vector_elem_product<F: PrimeField>(a: &Vec<F>, u: F) -> Vec<F> {
     r
 }
 
+/// Subtracts one vector from another.
+///
+/// # Arguments
+///
+/// * `a` - The first vector.
+/// * `b` - The second vector.
+///
+/// # Returns
+///
+/// A vector resulting from subtracting `b` from `a`.
 #[allow(dead_code)]
 pub fn vec_sub<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     assert_eq!(a.len(), b.len());
@@ -39,6 +80,16 @@ pub fn vec_sub<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     r
 }
 
+/// Adds two vectors.
+///
+/// # Arguments
+///
+/// * `a` - The first vector.
+/// * `b` - The second vector.
+///
+/// # Returns
+///
+/// A vector resulting from adding `a` and `b`.
 #[allow(dead_code)]
 pub fn vec_add<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     assert_eq!(a.len(), b.len());
@@ -49,6 +100,16 @@ pub fn vec_add<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> Vec<F> {
     r
 }
 
+/// Checks if two vectors are equal.
+///
+/// # Arguments
+///
+/// * `a` - The first vector.
+/// * `b` - The second vector.
+///
+/// # Returns
+///
+/// `true` if `a` and `b` are equal, `false` otherwise.
 #[allow(dead_code)]
 pub fn vec_equal<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> bool {
     if a.len() != b.len() {
@@ -63,6 +124,15 @@ pub fn vec_equal<F: PrimeField>(a: &Vec<F>, b: &Vec<F>) -> bool {
     true
 }
 
+/// Converts a matrix of `usize` values to a matrix of `F` values.
+///
+/// # Arguments
+///
+/// * `matrix` - A matrix represented as a vector of vectors of `usize` values.
+///
+/// # Returns
+///
+/// A matrix represented as a vector of vectors of `F` values.
 #[allow(dead_code)]
 pub fn to_f_matrix<F: PrimeField> (matrix: Vec<Vec<usize>>) -> Vec<Vec<F>> {
     let mut r: Vec<Vec<F>> = vec![Vec::new(); matrix.len()];
@@ -75,6 +145,15 @@ pub fn to_f_matrix<F: PrimeField> (matrix: Vec<Vec<usize>>) -> Vec<Vec<F>> {
     r
 }
 
+/// Converts a vector of `usize` values to a vector of `F` values.
+///
+/// # Arguments
+///
+/// * `z` - A vector of `usize` values.
+///
+/// # Returns
+///
+/// A vector of `F` values.
 #[allow(dead_code)]
 pub fn to_f_vec<F: PrimeField>(z: Vec<usize>) -> Vec<F> {
     let mut r: Vec<F> = vec![F::zero(); z.len()];

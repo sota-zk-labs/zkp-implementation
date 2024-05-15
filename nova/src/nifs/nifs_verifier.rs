@@ -10,6 +10,7 @@ use crate::utils::{to_f_matrix, to_f_vec};
 
 impl <T: Digest + Default> NIFS<T> {
 
+    /// NIFS.V generate the folded instance.
     pub fn verifier(
         r: ScalarField,
         fi1: &FInstance,
@@ -19,6 +20,8 @@ impl <T: Digest + Default> NIFS<T> {
         NIFS::<T>::fold_instance(r, fi1, fi2, com_t)
     }
 
+    /// NIFS.V can verify whether the Prover folding process was done
+    /// correctly or not via the NIFS proof.
     pub fn verify(
         proof: &NIFSProof,
         fi1: &FInstance,
@@ -44,6 +47,7 @@ impl <T: Digest + Default> NIFS<T> {
         Ok(())
     }
 
+    /// Verify challenge r via Fiat-Shamir
     pub fn verify_challenge(
         r: ScalarField,
         fi1_u: ScalarField,
@@ -65,6 +69,8 @@ impl <T: Digest + Default> NIFS<T> {
 
         Ok(())
     }
+
+    /// Verify KZG opening
     pub fn verify_opening(
         proof: &NIFSProof,
         fi3: &FInstance, // folded instance.
@@ -93,6 +99,7 @@ impl <T: Digest + Default> NIFS<T> {
 }
 
 #[allow(dead_code)]
+/// This function is only used for generate test values such as: r1cs matrices, W, x.
 pub fn gen_test_values<F: PrimeField>(inputs: Vec<usize>) -> (R1CS<F>, Vec<Vec<F>>, Vec<Vec<F>>) {
     // R1CS for: x^3 + x + 5 = y (example from article
     // https://vitalik.eth.limo/general/2016/12/10/qap.html )

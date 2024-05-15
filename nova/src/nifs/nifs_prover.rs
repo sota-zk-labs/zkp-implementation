@@ -9,6 +9,7 @@ use crate::transcript::Transcript;
 
 impl <T: Digest + Default> NIFS<T> {
 
+    /// Prover output a folded instance-witness pair, com_T and challenge r via Fiat-Shamir
     pub fn prover(
         r1cs: &R1CS<ScalarField>,
         fw1: &FWitness,
@@ -18,6 +19,8 @@ impl <T: Digest + Default> NIFS<T> {
         scheme: &KzgScheme,
         transcript: &mut Transcript<T>
     ) -> (FWitness, FInstance, KzgCommitment, ScalarField) {
+
+        // generate Z = (W, x, u)
         let mut z1 = fw1.w.clone();
         z1.append(&mut fi1.x.clone());
         z1.push(fi1.u);
@@ -40,6 +43,7 @@ impl <T: Digest + Default> NIFS<T> {
         (new_witness, new_instance, com_t, r)
     }
 
+    /// Generate NIFS proof. Create openings by using KZG commitment
     pub fn prove(
         r: ScalarField,
         fw: &FWitness,
@@ -59,8 +63,8 @@ impl <T: Digest + Default> NIFS<T> {
         NIFSProof {
             r,
             opening_point,
-            opening_e: opening_e,
-            opening_w: opening_w
+            opening_e,
+            opening_w
         }
     }
 }

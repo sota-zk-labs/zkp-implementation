@@ -8,7 +8,9 @@ use crate::circuit::{AugmentedCircuit, FCircuit};
 use crate::nifs::{NIFSProof};
 use crate::r1cs::{FInstance, FWitness};
 
-/// zero knowledge proof for IVC
+/// This struct is the zero knowledge proof for IVC
+/// π = (U, u, com_T , π_U') where U' is the folded instance
+/// of u and U.
 pub struct ZkIVCProof {
     pub u_i: FInstance,
     pub big_u_i: FInstance,
@@ -16,6 +18,7 @@ pub struct ZkIVCProof {
     pub folded_u_proof: Option<NIFSProof>,
 }
 
+/// This struct is the proof for IVC: Π = (u, w) (U, W)
 pub struct IVCProof {
     pub u_i: FInstance,
     pub w_i: FWitness,
@@ -40,6 +43,7 @@ impl IVCProof {
         }
     }
 
+    // Generate a trivial IVC proof.
     pub fn trivial_ivc_proof(
         trivial_instance: &FInstance,
         trivial_witness: &FWitness,
@@ -68,6 +72,7 @@ impl ZkIVCProof {
 
 }
 
+/// IVC structure includes a scheme for commitment and an augmented F' function
 pub struct IVC <T: Digest + Default + ark_serialize::Write, FC: FCircuit<>> {
     pub(crate) scheme: KzgScheme,
     pub(crate) augmented_circuit: AugmentedCircuit<T, FC>,

@@ -8,6 +8,9 @@ use crate::transcript::Transcript;
 
 #[allow(dead_code)]
 impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit> IVC <T, FC> {
+
+    /// IVC verifier will do 5 steps as mentioned in constructor 4
+    /// of Nova paper.
     pub fn verify(
         &mut self,
         zk_ivc_proof: &ZkIVCProof,
@@ -42,7 +45,6 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit> IVC <T, FC> {
             let folded_u_proof = zk_ivc_proof.folded_u_proof.clone().unwrap();
 
             // 2. check that u.x = hash(i, z_0, z_i, U)
-            // println!("z_i, {:?}", z_i);
             let hash_io = AugmentedCircuit::<T, FC>::hash_io(i, z_0, z_i, &big_u_i);
             let hash_fr = ScalarField::from_le_bytes_mod_order(&hash_io.into_bigint().to_bytes_le());
             if u_i.x[0] != hash_fr {
@@ -256,8 +258,8 @@ mod tests {
             z_0: z_0.clone(),
             z_i: z_0.clone(),
             z_i1: None,
-            hash_x: None,
-            hash_x_next: None,
+            h_i: None,
+            h_i1: None,
             phantom_data_t: PhantomData
         };
 
