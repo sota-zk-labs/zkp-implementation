@@ -24,6 +24,49 @@ pub struct IVCProof {
     pub big_w_i: FWitness,
 }
 
+impl IVCProof {
+
+    pub fn new(
+        u_i: &FInstance,
+        w_i: &FWitness,
+        big_u_i: &FInstance,
+        big_w_i: &FWitness,
+    ) -> Self {
+        Self {
+            u_i: u_i.clone(),
+            w_i: w_i.clone(),
+            big_u_i: big_u_i.clone(),
+            big_w_i: big_w_i.clone()
+        }
+    }
+
+    pub fn trivial_ivc_proof(
+        trivial_instance: &FInstance,
+        trivial_witness: &FWitness,
+    ) -> Self {
+        Self {
+            u_i: trivial_instance.clone(),
+            w_i: trivial_witness.clone(),
+            big_u_i: trivial_instance.clone(),
+            big_w_i: trivial_witness.clone()
+        }
+    }
+}
+
+impl ZkIVCProof {
+    pub fn trivial_zk_ivc_proof(
+        trivial_instance: &FInstance,
+    ) -> Self {
+        Self {
+            u_i: trivial_instance.clone(),
+            big_u_i: trivial_instance.clone(),
+            com_t: None,
+            folded_u_proof: None
+        }
+    }
+
+}
+
 pub struct IVC <T: Digest + Default + ark_serialize::Write, FC: FCircuit<>> {
     scheme: KzgScheme,
     augmented_circuit: AugmentedCircuit<T, FC>,

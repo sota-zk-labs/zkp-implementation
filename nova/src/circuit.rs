@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::ops::Add;
 use ark_ec::CurveGroup;
-use ark_ff::{BigInteger, Field, One, PrimeField};
+use ark_ff::{BigInteger, Field, One, PrimeField, Zero};
 use ark_serialize::CanonicalSerialize;
 use sha2::Digest;
 use kzg::commitment::KzgCommitment;
@@ -40,6 +40,24 @@ pub struct AugmentedCircuit<T: Digest + Default + ark_serialize::Write, FC: FCir
 }
 
 impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircuit <T, FC> {
+
+    pub fn new(
+        f_circuit: FC,
+        trivial_instance: &FInstance,
+        z_0: &State,
+    ) -> Self {
+        Self {
+            f_circuit,
+            i: BaseField::zero(),
+            trivial_instance: trivial_instance.clone(),
+            z_0: z_0.clone(),
+            z_i: z_0.clone(),
+            z_i1: None,
+            hash_x: None,
+            hash_x_next: None,
+            phantom_data_t: PhantomData
+        }
+    }
     pub fn run(
         &mut self,
         u_i: &FInstance,
@@ -62,7 +80,7 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
 
             // get hash_x
             let hash_x = self.hash_x.clone().unwrap();
-            println!("c: hash_x: {:?}", hash_x);
+
             // 1. check that u.x =? hash_x
             // Because u_i.x is in ScalarField while hash_x is in BaseField, they need to
             // be converted into a comparable type
@@ -71,8 +89,6 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             let u_dot_x = u_i.x[0].clone();
             let hash_fr = ScalarField::from_le_bytes_mod_order(&hash_x.into_bigint().to_bytes_le());
             if u_dot_x != hash_fr {
-                println!("u_dot_x: {:?}", u_dot_x);
-                println!("hash_fr: {:?}", hash_fr);
                 return Err(String::from("Public IO is wrong "));
             }
 
@@ -91,9 +107,6 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             transcript.feed_scalar_num(big_u_i.unwrap().u);
             transcript.feed(com_t.unwrap());
             let [r] = transcript.generate_challenges();
-            if self.i == BaseField::one() {
-                println!("c: r is: {:?}", r);
-            }
 
             // 3.compute U_{i+1}
             let big_u_i1 = NIFS::<T>::verifier(r, u_i, big_u_i.unwrap(), com_t.unwrap());
