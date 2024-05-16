@@ -11,7 +11,8 @@ on:
 jobs:
   cargo-check:
     name: Cargo check
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -19,14 +20,14 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: arduino/setup-protoc@v3
       - uses: actions-rs/cargo@v1
         with:
           command: check
 
   fmt-check:
     name: Rust fmt
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -42,15 +43,21 @@ jobs:
 
   test-and-coverage:
     name: Test and Coverage
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - uses: arduino/setup-protoc@v3
+        
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
 
       - name: Install dependencies
         run: |
+          apt install libssl-dev
           rustup self update
           rustup update
           cargo install cargo-tarpaulin
@@ -62,7 +69,8 @@ jobs:
     name: Release Packaging
     env:
       PROJECT_NAME_UNDERSCORE: rust-server
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [cargo-check, fmt-check, test-and-coverage]
     steps:
@@ -84,8 +92,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-
-      - uses: arduino/setup-protoc@v3
 
       - name: Release Build
         run: cargo build --release --all

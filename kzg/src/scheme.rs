@@ -7,8 +7,7 @@ use ark_ec::short_weierstrass::Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{One, Zero};
 use ark_poly::{DenseUVPolynomial, Polynomial};
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{Rng, RngCore};
 
 use crate::commitment::KzgCommitment;
 use crate::opening::KzgOpening;
@@ -176,12 +175,12 @@ impl KzgScheme {
         commitments: &[KzgCommitment],
         points: &[Fr],
         openings: &[KzgOpening],
+        rng: &mut impl RngCore,
     ) -> bool {
         assert_eq!(commitments.len(), points.len());
         assert_eq!(openings.len(), points.len());
 
         let g1 = G1Point::generator();
-        let mut rng = StdRng::from_entropy();
         let mut e_1 = G1Point::zero();
         let mut e_2 = G1Point::zero();
 

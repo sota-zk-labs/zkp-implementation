@@ -15,8 +15,6 @@ impl KzgCommitment {
 mod tests {
     use std::ops::Mul;
 
-    use crate::commitment::KzgCommitment;
-    use crate::opening::KzgOpening;
     use ark_bls12_381::Fr;
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::One;
@@ -24,6 +22,8 @@ mod tests {
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
 
+    use crate::commitment::KzgCommitment;
+    use crate::opening::KzgOpening;
     use crate::scheme::KzgScheme;
     use crate::srs::Srs;
     use crate::types::{G1Point, Poly};
@@ -114,6 +114,7 @@ mod tests {
             .map(|(f_i, z_i)| scheme.open(f_i.clone(), z_i))
             .collect();
         let c: Vec<KzgCommitment> = f.iter().map(|f_i| scheme.commit(f_i)).collect();
-        assert!(scheme.batch_verify(c.as_slice(), &z, &openings));
+        let mut rng = StdRng::from_entropy();
+        assert!(scheme.batch_verify(c.as_slice(), &z, &openings, &mut rng));
     }
 }

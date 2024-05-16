@@ -1,4 +1,4 @@
-pub mod lookup_vector;
-pub mod lookup_element;
-pub mod proof;
-mod errors;
+pub mod quotient_poly;
+pub mod scheme;
+pub mod transcript_label;
+pub mod types;
