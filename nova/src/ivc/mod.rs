@@ -74,7 +74,7 @@ impl ZkIVCProof {
 
 /// IVC structure includes a scheme for commitment and an augmented F' function
 pub struct IVC <T: Digest + Default + ark_serialize::Write, FC: FCircuit<>> {
-    pub(crate) scheme: KzgScheme,
-    pub(crate) augmented_circuit: AugmentedCircuit<T, FC>,
+    pub scheme: KzgScheme,
+    pub augmented_circuit: AugmentedCircuit<T, FC>,
 }
 

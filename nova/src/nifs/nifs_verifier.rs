@@ -137,8 +137,6 @@ pub fn gen_test_values<F: PrimeField>(inputs: Vec<usize>) -> (R1CS<F>, Vec<Vec<F
         let x_i = to_f_vec::<F>(vec![input * input * input + input + 5]);  // output: x^3 + x + 5
         x.push(x_i.clone());
     }
-    // println!("w: {:?}", w);
-    // println!("x: {:?}", x);
 
     let r1cs = R1CS::<F> { matrix_a: a, matrix_b: b, matrix_c: c, num_io: 1, num_vars: 4 };
     (r1cs, w, x)
