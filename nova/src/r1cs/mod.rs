@@ -61,17 +61,16 @@ impl FWitness {
         // cW.0 = cW.0.mul(self.rW).into_affine();
 
         FInstance {
-            com_e: com_e,
+            com_e,
             u: ScalarField::one(),
-            com_w: com_w,
+            com_w,
             x: x.clone(),
         }
     }
 }
 
-/// This function is used for testing only, which creates a trivial
-/// instance-witness pair
-#[cfg(test)]
+/// This function creates a trivial instance-witness pair
+#[allow(dead_code)]
 pub fn create_trivial_pair(
     x_len: usize,
     w_len: usize,

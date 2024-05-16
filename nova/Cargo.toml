@@ -3,6 +3,11 @@ name = "nova"
 version = "0.1.0"
 edition = "2021"
 
+
+[[example]]
+name = "nova-example"
+path = "examples/examples.rs"
+
 [dependencies]
 ark-ff = "0.4.2"
 ark-ec = "0.4.2"
