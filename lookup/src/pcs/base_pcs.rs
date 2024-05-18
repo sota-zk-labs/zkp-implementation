@@ -1,5 +1,3 @@
-use std::ops::{Add, Mul};
-
 use ark_ff::PrimeField;
 
 use crate::errors::Error;
@@ -16,10 +14,7 @@ use crate::types::{LookupProof, LookupProofTransferData, LookupVerifyTransferDat
 /// > will be completed depending on the PCS.
 pub trait BasePCS<F: PrimeField>: Sized {
     /// The type of commitment.
-    type Commitment: ToBytes
-        + Clone
-        + Add<Output = Self::Commitment>
-        + Mul<F, Output = Self::Commitment>;
+    type Commitment: ToBytes + Clone;
     /// The type of opening data.
     type Opening;
     /// The type of proof for verifying the correctness of an opening.

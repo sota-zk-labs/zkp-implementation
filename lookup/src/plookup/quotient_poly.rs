@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use ark_ff::{PrimeField, Zero};
-use ark_poly::{DenseUVPolynomial, EvaluationDomain, Radix2EvaluationDomain};
+use ark_poly::{DenseUVPolynomial, EvaluationDomain};
 
 use crate::plookup::types::PlookupEvaluations;
 use crate::poly::ExtraDensePoly;
@@ -62,7 +62,7 @@ impl<F: PrimeField> QuotientPoly<F> {
         beta: &F,
         gamma: &F,
         evaluation_challenge: &F,
-        domain: &Radix2EvaluationDomain<F>,
+        domain: &Domain<F>,
     ) -> F {
         let one = F::one();
         // g^n

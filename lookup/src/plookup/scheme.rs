@@ -1,7 +1,8 @@
 use std::collections::HashSet;
+use std::ops::{Add, Mul};
 
 use ark_ff::PrimeField;
-use ark_poly::{EvaluationDomain, Polynomial, Radix2EvaluationDomain};
+use ark_poly::{EvaluationDomain, Polynomial};
 
 use crate::errors::Error;
 use crate::lookup::Lookup;
@@ -15,10 +16,12 @@ use crate::plookup::types::{
     PlookupProveTransferData, PlookupVerifyTransferData,
 };
 use crate::poly::ExtraDensePoly;
-use crate::transcript::TranscriptProtocol;
+use crate::transcript::{TranscriptProtocol};
 use crate::types::{Domain, LookupProof, LookupProofTransferData, LookupVerifyTransferData, Poly};
 
-pub struct Plookup<F: PrimeField, P: AdditiveHomomorphicPCS<F> = KZG12_381> {
+pub struct Plookup<F: PrimeField, P: AdditiveHomomorphicPCS<F> = KZG12_381>
+    where P::Commitment: Add<Output=P::Commitment>
+    + Mul<F, Output=P::Commitment> {
     /// The length of an element
     w: usize,
     /// The witnesses
@@ -32,7 +35,9 @@ pub struct Plookup<F: PrimeField, P: AdditiveHomomorphicPCS<F> = KZG12_381> {
 }
 
 #[allow(clippy::type_complexity)]
-impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Lookup<F, P> for Plookup<F, P> {
+impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Lookup<F, P> for Plookup<F, P>
+    where P::Commitment: Add<Output=P::Commitment>
+    + Mul<F, Output=P::Commitment> {
     type Proof = PlookupProof<F, P>;
     type Element = Multiset<F>;
 
@@ -147,7 +152,7 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Lookup<F, P> for Plookup<F, P>
     }
 
     fn verify(&self, transcript: &mut TranscriptProtocol<F>, proof: &Self::Proof) -> bool {
-        let domain = Radix2EvaluationDomain::<F>::new(proof.base_proof.d).unwrap();
+        let domain = Domain::<F>::new(proof.base_proof.d).unwrap();
         // Appends `com(f_i)`
         for fi_commit in &proof.base_proof.commitments.f_i {
             transcript.append_commitment(TranscriptLabel::F_I_COMMIT, fi_commit);
@@ -227,7 +232,9 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Lookup<F, P> for Plookup<F, P>
     }
 }
 
-impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P> {
+impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P>
+    where P::Commitment: Add<Output=P::Commitment>
+    + Mul<F, Output=P::Commitment> {
     /// Creates a new instance from a table and a PCS.
     ///
     /// # Arguments
@@ -292,7 +299,7 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P> {
         assert_eq!(t.len(), f.len() + 1);
 
         // Calculates com(f_i) and com(t_i)
-        let domain = Radix2EvaluationDomain::<F>::new(t.len()).unwrap();
+        let domain = Domain::<F>::new(t.len()).unwrap();
         let mut f_i_commit: Vec<P::Commitment> = vec![];
         let mut t_i_commit: Vec<P::Commitment> = vec![];
         for i in 0..self.w {
@@ -397,6 +404,7 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P> {
         Ok((Multiset(h1), Multiset(h2)))
     }
 }
+
 #[cfg(test)]
 mod test {
     use ark_poly::EvaluationDomain;
@@ -404,7 +412,7 @@ mod test {
 
     use crate::lookup::Lookup;
     use crate::multiset::{ints_to_fields, Multiset};
-    use crate::pcs::kzg10::{KzgField, KZG12_381};
+    use crate::pcs::kzg10::{KZG12_381, KzgField};
     use crate::plookup::scheme::Plookup;
     use crate::plookup::transcript_label::TranscriptLabel;
     use crate::template_table::xor::XorTable;
@@ -447,7 +455,7 @@ mod test {
             .add_witness(Multiset(vec![
                 KzgField::from(3651),
                 KzgField::from(5),
-                KzgField::from(5 ^ 6)
+                KzgField::from(5 ^ 6),
             ]))
             .is_err());
     }

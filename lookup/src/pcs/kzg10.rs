@@ -201,7 +201,7 @@ impl BasePCS<KzgField> for KZG12_381 {
     }
 }
 
-impl AdditiveHomomorphicPCS<KzgField> for KZG12_381 {}
+impl AdditiveHomomorphicPCS<KzgField> for KZG12_381 { }
 
 impl KZG12_381 {
     pub fn new(circuit_size: usize) -> Self {
