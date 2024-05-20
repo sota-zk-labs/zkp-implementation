@@ -1,5 +1,5 @@
 [workspace]
-members = ["plonk", "kzg"]
+members = ["plonk", "kzg", "lookup"]
 resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
