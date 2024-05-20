@@ -10,7 +10,9 @@ use crate::types::Poly;
 /// - `com(a + b) = com(a) + com(b)`
 /// - `z * com(a) = com(za)`
 pub trait AdditiveHomomorphicPCS<F: PrimeField>: BasePCS<F>
-    where Self::Commitment: Add<Output=Self::Commitment> + Mul<F, Output=Self::Commitment>, {
+where
+    Self::Commitment: Add<Output = Self::Commitment> + Mul<F, Output = Self::Commitment>,
+{
     /// Aggregates a list of elements using a random challenge.
     ///
     /// Let `z` be the challenge, and the elements be `e0, e2, ..., en`. The aggregate result is
@@ -25,10 +27,10 @@ pub trait AdditiveHomomorphicPCS<F: PrimeField>: BasePCS<F>
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::needless_range_loop)]
     fn aggregate<E>(elements: &Vec<&E>, challenge: &F) -> Result<E, Error>
-        where
-            E: Add<E, Output=E>,
-            E: Mul<F, Output=E>,
-            E: Clone,
+    where
+        E: Add<E, Output = E>,
+        E: Mul<F, Output = E>,
+        E: Clone,
     {
         if elements.is_empty() {
             return Err(Error::EmptyVec);

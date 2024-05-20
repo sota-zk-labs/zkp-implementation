@@ -28,7 +28,11 @@ pub trait Lookup<F: PrimeField, P: BasePCS<F>> {
     /// * `proof`: The proof of the lookup table.
     ///
     /// returns: Returns `true` if the proof is valid, otherwise `false`.
-    fn verify(&self, transcript: &mut TranscriptProtocol<F>, proof: &Self::Proof) -> bool;
+    fn verify(
+        &self,
+        transcript: &mut TranscriptProtocol<F>,
+        proof: &Self::Proof,
+    ) -> Result<bool, Error>;
 
     /// Adds a witness that needs to be proven to exist in the table
     ///

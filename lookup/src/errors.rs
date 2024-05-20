@@ -2,7 +2,7 @@
 #[derive(Debug)]
 pub enum Error {
     /// Error indicating that elements cannot be aggregated.
-    Unaggregatable,
+    NonAggregatable,
     /// Error indicating that an incorrect lookup scheme was used.
     WrongLookupScheme,
     /// Error indicating that the length of a witness does not match the element length in the table

@@ -3,11 +3,6 @@ use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 use ark_std::test_rng;
 
-use kzg::commitment::KzgCommitment;
-use kzg::opening::KzgOpening as OtherKzgOpening;
-use kzg::scheme::KzgScheme;
-use kzg::srs::Srs;
-
 use crate::errors::Error;
 use crate::pcs::additive_homomorphic::AdditiveHomomorphicPCS;
 use crate::pcs::base_pcs::BasePCS;
@@ -15,6 +10,9 @@ use crate::plookup::transcript_label::TranscriptLabel;
 use crate::poly::ExtraDensePoly;
 use crate::transcript::{ToBytes, TranscriptProtocol};
 use crate::types::{LookupProof, LookupProofTransferData, LookupVerifyTransferData, Poly};
+use kzg::commitment::KzgCommitment;
+use kzg::opening::KzgOpening as OtherKzgOpening;
+use kzg::scheme::KzgScheme;
 
 impl ToBytes for KzgCommitment {
     fn to_bytes(&self) -> Vec<u8> {
@@ -25,17 +23,12 @@ impl ToBytes for KzgCommitment {
 }
 pub type KzgField = Fr;
 
-/// This struct represents KZG scheme using BLS12_381
-pub struct KZG12_381 {
-    scheme: KzgScheme,
-}
-
 /// This struct represents extra proof that used to verify in `Plookup` using KZG
 pub struct PlookupKZGProof<Commitment> {
     /// Commitment of aggregated quotient polynomial that evaluated at `evaluation_challenge`
-    pub agg_quotient_witness: Commitment,
+    pub agg_quotient_commitment: Commitment,
     /// Commitment of aggregated quotient polynomial that evaluated at `evaluation_challenge * g`
-    pub shifted_agg_quotient_witness: Commitment,
+    pub shifted_agg_quotient_commitment: Commitment,
 }
 
 /// The KZG proof
@@ -52,18 +45,18 @@ pub struct KzgOpening<F: PrimeField, Commitment> {
 }
 
 /// Implements KZG to deal with `Plookup`
-impl BasePCS<KzgField> for KZG12_381 {
+impl BasePCS<KzgField> for KzgScheme {
     type Commitment = KzgCommitment;
     type Opening = KzgOpening<KzgField, Self::Commitment>;
     type Proof = KzgProof<KzgField, Self::Commitment>;
     type LookupProof = PlookupKZGProof<KzgCommitment>;
 
     fn commit(&self, poly: &Poly<KzgField>) -> KzgCommitment {
-        self.scheme.commit(poly)
+        self.commit(poly)
     }
 
     fn open(&self, poly: &Poly<KzgField>, z: KzgField) -> Self::Opening {
-        let c = self.scheme.open(poly.clone(), z);
+        let c = self.open(poly.clone(), z);
         KzgOpening {
             q_com: KzgCommitment(c.0),
             fz: c.1,
@@ -71,7 +64,7 @@ impl BasePCS<KzgField> for KZG12_381 {
     }
 
     fn verify(&self, proof: &Self::Proof) -> bool {
-        self.scheme.verify(
+        self.verify(
             &proof.f_com,
             &OtherKzgOpening(proof.opening.q_com.0, proof.opening.fz),
             proof.z,
@@ -115,8 +108,8 @@ impl BasePCS<KzgField> for KZG12_381 {
                 self.commit(&shifted_agg_quotient_witness_poly);
 
             return Ok(Self::LookupProof {
-                agg_quotient_witness: agg_quotient_witness_commit,
-                shifted_agg_quotient_witness: shifted_agg_quotient_witness_commit,
+                agg_quotient_commitment: agg_quotient_witness_commit,
+                shifted_agg_quotient_commitment: shifted_agg_quotient_witness_commit,
             });
         }
         Err(Error::WrongLookupScheme)
@@ -177,7 +170,7 @@ impl BasePCS<KzgField> for KZG12_381 {
                     &aggregation_challenge,
                 )
                 .unwrap();
-                return Ok(self.scheme.batch_verify(
+                return Ok(self.batch_verify(
                     &[agg_witness_commit, shifted_agg_witness_commit],
                     &[
                         p_data.evaluation_challenge,
@@ -185,11 +178,11 @@ impl BasePCS<KzgField> for KZG12_381 {
                     ],
                     &[
                         OtherKzgOpening(
-                            p_proof.pcs_proof.agg_quotient_witness.clone().0,
+                            p_proof.pcs_proof.agg_quotient_commitment.clone().0,
                             agg_witness_eval,
                         ),
                         OtherKzgOpening(
-                            p_proof.pcs_proof.shifted_agg_quotient_witness.clone().0,
+                            p_proof.pcs_proof.shifted_agg_quotient_commitment.clone().0,
                             shifted_agg_witness_eval,
                         ),
                     ],
@@ -201,12 +194,4 @@ impl BasePCS<KzgField> for KZG12_381 {
     }
 }
 
-impl AdditiveHomomorphicPCS<KzgField> for KZG12_381 { }
-
-impl KZG12_381 {
-    pub fn new(circuit_size: usize) -> Self {
-        Self {
-            scheme: KzgScheme::new(Srs::new(circuit_size)),
-        }
-    }
-}
+impl AdditiveHomomorphicPCS<KzgField> for KzgScheme {}

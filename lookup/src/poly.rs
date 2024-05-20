@@ -141,9 +141,9 @@ impl<F: PrimeField> ExtraDensePoly<F> for DensePolynomial<F> {
 mod test {
     use ark_poly::{DenseUVPolynomial, EvaluationDomain};
 
-    use crate::multiset::ints_to_fields;
     use crate::pcs::kzg10::KzgField;
     use crate::poly::ExtraDensePoly;
+    use crate::row::ints_to_fields;
     use crate::types::{Domain, Poly};
 
     #[test]

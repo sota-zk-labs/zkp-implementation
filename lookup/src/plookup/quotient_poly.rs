@@ -36,11 +36,13 @@ impl<F: PrimeField> QuotientPoly<F> {
         gamma: F,
     ) -> Poly<F> {
         let domain_2n = &Domain::<F>::new(2 * domain.size()).unwrap();
-        let check_z1_zn = Self::check_z1_zn_equal_one(z, domain, domain_2n);
-        let check_z = Self::check_z_poly(f, t, h1, h2, z, gamma, beta, domain, domain_2n);
-        let check_h1_h2 = Self::check_last_h1_equal_first_h2(h1, h2, domain, domain_2n);
+        let z1_zn_equal_one_poly = Self::z1_zn_equal_one_poly(z, domain, domain_2n);
+        let z_i_constraints_poly =
+            Self::z_i_constraints_poly(f, t, h1, h2, z, gamma, beta, domain, domain_2n);
+        let last_h1_equal_first_h2_poly =
+            Self::last_h1_equal_first_h2_poly(h1, h2, domain, domain_2n);
 
-        let aggregate = check_z1_zn + check_z + check_h1_h2;
+        let aggregate = z1_zn_equal_one_poly + z_i_constraints_poly + last_h1_equal_first_h2_poly;
         let (q, r) = aggregate.divide_by_vanishing_poly(*domain).unwrap();
         assert!(r.is_zero());
         q
@@ -114,7 +116,7 @@ impl<F: PrimeField> QuotientPoly<F> {
     /// * `domain_2n`: The domain has size `2n`.
     ///
     /// returns: The polynomial represents above condition.
-    fn check_z1_zn_equal_one(z: &Poly<F>, domain: &Domain<F>, domain_2n: &Domain<F>) -> Poly<F> {
+    fn z1_zn_equal_one_poly(z: &Poly<F>, domain: &Domain<F>, domain_2n: &Domain<F>) -> Poly<F> {
         // L_0
         let l0 = Poly::lagrange_basis(0, domain);
         // L_n
@@ -141,7 +143,7 @@ impl<F: PrimeField> QuotientPoly<F> {
     /// * `domain_2n`: The domain has size `2n`.
     ///
     /// returns: The polynomial represents above condition.
-    fn check_z_poly(
+    fn z_i_constraints_poly(
         f: &Poly<F>,
         t: &Poly<F>,
         h1: &Poly<F>,
@@ -225,7 +227,7 @@ impl<F: PrimeField> QuotientPoly<F> {
     /// * `domain_2n`: The domain has size `2n`
     ///
     /// returns: The polynomial represents above condition.
-    fn check_last_h1_equal_first_h2(
+    fn last_h1_equal_first_h2_poly(
         h1: &Poly<F>,
         h2: &Poly<F>,
         domain: &Domain<F>,

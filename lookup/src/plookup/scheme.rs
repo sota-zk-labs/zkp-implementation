@@ -3,12 +3,11 @@ use std::ops::{Add, Mul};
 
 use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, Polynomial};
+use kzg::scheme::KzgScheme;
 
 use crate::errors::Error;
 use crate::lookup::Lookup;
-use crate::multiset::Multiset;
 use crate::pcs::additive_homomorphic::AdditiveHomomorphicPCS;
-use crate::pcs::kzg10::KZG12_381;
 use crate::plookup::quotient_poly::QuotientPoly;
 use crate::plookup::transcript_label::TranscriptLabel;
 use crate::plookup::types::{
@@ -16,18 +15,20 @@ use crate::plookup::types::{
     PlookupProveTransferData, PlookupVerifyTransferData,
 };
 use crate::poly::ExtraDensePoly;
-use crate::transcript::{TranscriptProtocol};
+use crate::row::Row;
+use crate::transcript::TranscriptProtocol;
 use crate::types::{Domain, LookupProof, LookupProofTransferData, LookupVerifyTransferData, Poly};
 
-pub struct Plookup<F: PrimeField, P: AdditiveHomomorphicPCS<F> = KZG12_381>
-    where P::Commitment: Add<Output=P::Commitment>
-    + Mul<F, Output=P::Commitment> {
+pub struct Plookup<F: PrimeField, P: AdditiveHomomorphicPCS<F> = KzgScheme>
+where
+    P::Commitment: Add<Output = P::Commitment> + Mul<F, Output = P::Commitment>,
+{
     /// The length of an element
     w: usize,
     /// The witnesses
-    f: Vec<Multiset<F>>,
+    f: Vec<Row<F>>,
     /// The table
-    t: Vec<Multiset<F>>,
+    t: Vec<Row<F>>,
     /// The hash table of elements in the table
     hash_t: HashSet<Vec<F>>,
     /// The PCS
@@ -36,10 +37,11 @@ pub struct Plookup<F: PrimeField, P: AdditiveHomomorphicPCS<F> = KZG12_381>
 
 #[allow(clippy::type_complexity)]
 impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Lookup<F, P> for Plookup<F, P>
-    where P::Commitment: Add<Output=P::Commitment>
-    + Mul<F, Output=P::Commitment> {
+where
+    P::Commitment: Add<Output = P::Commitment> + Mul<F, Output = P::Commitment>,
+{
     type Proof = PlookupProof<F, P>;
-    type Element = Multiset<F>;
+    type Element = Row<F>;
 
     fn prove(&self, transcript: &mut TranscriptProtocol<F>) -> Self::Proof {
         let (fold_f, f_i_commit, fold_t, t_i_commit) = self.preprocess(transcript);
@@ -151,7 +153,11 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Lookup<F, P> for Plookup<F, P>
         }
     }
 
-    fn verify(&self, transcript: &mut TranscriptProtocol<F>, proof: &Self::Proof) -> bool {
+    fn verify(
+        &self,
+        transcript: &mut TranscriptProtocol<F>,
+        proof: &Self::Proof,
+    ) -> Result<bool, Error> {
         let domain = Domain::<F>::new(proof.base_proof.d).unwrap();
         // Appends `com(f_i)`
         for fi_commit in &proof.base_proof.commitments.f_i {
@@ -201,19 +207,17 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Lookup<F, P> for Plookup<F, P>
         );
         transcript.append_scalar(TranscriptLabel::Z_G_EVAL, &proof.base_proof.evaluations.z_g);
 
-        self.pcs
-            .lookup_verify(
-                transcript,
-                &LookupProof::Plookup(proof),
-                &LookupVerifyTransferData::Plookup(PlookupVerifyTransferData {
-                    f_commit,
-                    t_commit,
-                    quotient_eval,
-                    evaluation_challenge,
-                    shifted_evaluation_challenge,
-                }),
-            )
-            .unwrap()
+        self.pcs.lookup_verify(
+            transcript,
+            &LookupProof::Plookup(proof),
+            &LookupVerifyTransferData::Plookup(PlookupVerifyTransferData {
+                f_commit,
+                t_commit,
+                quotient_eval,
+                evaluation_challenge,
+                shifted_evaluation_challenge,
+            }),
+        )
     }
 
     fn add_witness(&mut self, witness: Self::Element) -> Result<(), Error> {
@@ -233,8 +237,9 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Lookup<F, P> for Plookup<F, P>
 }
 
 impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P>
-    where P::Commitment: Add<Output=P::Commitment>
-    + Mul<F, Output=P::Commitment> {
+where
+    P::Commitment: Add<Output = P::Commitment> + Mul<F, Output = P::Commitment>,
+{
     /// Creates a new instance from a table and a PCS.
     ///
     /// # Arguments
@@ -244,7 +249,7 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P>
     ///
     /// returns: `Plookup<F, P>` as a new instance.
     #[allow(dead_code)]
-    fn new(table: Vec<Multiset<F>>, pcs: P) -> Self {
+    fn new(table: Vec<Row<F>>, pcs: P) -> Self {
         let mut hash_t = HashSet::<Vec<F>>::new();
         for record in &table {
             assert_eq!(
@@ -278,12 +283,7 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P>
     fn preprocess(
         &self,
         transcript: &mut TranscriptProtocol<F>,
-    ) -> (
-        Multiset<F>,
-        Vec<P::Commitment>,
-        Multiset<F>,
-        Vec<P::Commitment>,
-    ) {
+    ) -> (Row<F>, Vec<P::Commitment>, Row<F>, Vec<P::Commitment>) {
         let mut t = self.t.clone();
         let mut f = self.f.clone();
 
@@ -318,26 +318,24 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P>
 
         // Folds elements into field elements
         let zeta = transcript.challenge_scalar(TranscriptLabel::ZETA);
-        let fold_f = Multiset(
-            f.iter()
-                .map(|fi| P::aggregate(&fi.0.iter().collect(), &zeta).unwrap())
-                .collect(),
-        );
-        let fold_t = Multiset(
-            t.iter()
-                .map(|ti| P::aggregate(&ti.0.iter().collect(), &zeta).unwrap())
-                .collect(),
-        );
+        let fold_f = Row(f
+            .iter()
+            .map(|fi| P::aggregate(&fi.0.iter().collect(), &zeta).unwrap())
+            .collect());
+        let fold_t = Row(t
+            .iter()
+            .map(|ti| P::aggregate(&ti.0.iter().collect(), &zeta).unwrap())
+            .collect());
 
         (fold_f, f_i_commit, fold_t, t_i_commit)
     }
 
     /// Computes `Z`
     pub fn compute_accumulator_poly(
-        f: &Multiset<F>,
-        t: &Multiset<F>,
-        h1: &Multiset<F>,
-        h2: &Multiset<F>,
+        f: &Row<F>,
+        t: &Row<F>,
+        h1: &Row<F>,
+        h2: &Row<F>,
         beta: &F,
         gamma: &F,
         domain: &Domain<F>,
@@ -377,10 +375,7 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P>
     /// * `t`
     ///
     /// returns: `(h1, h2)`.
-    pub fn compute_h1_h2(
-        f: &Multiset<F>,
-        t: &Multiset<F>,
-    ) -> Result<(Multiset<F>, Multiset<F>), Error> {
+    pub fn compute_h1_h2(f: &Row<F>, t: &Row<F>) -> Result<(Row<F>, Row<F>), Error> {
         // check if all elements in `f` are also in `t`
         for fi in &f.0 {
             if !t.0.contains(fi) {
@@ -401,20 +396,22 @@ impl<F: PrimeField, P: AdditiveHomomorphicPCS<F>> Plookup<F, P>
         // h2[i] = s[i+n], i = 1..n+1
         let h2 = s.0[s.0.len() / 2..s.0.len()].to_vec();
         assert_eq!(h1.len(), h2.len());
-        Ok((Multiset(h1), Multiset(h2)))
+        Ok((Row(h1), Row(h2)))
     }
 }
 
 #[cfg(test)]
 mod test {
     use ark_poly::EvaluationDomain;
+    use kzg::scheme::KzgScheme;
+    use kzg::srs::Srs;
     use rand::Rng;
 
     use crate::lookup::Lookup;
-    use crate::multiset::{ints_to_fields, Multiset};
-    use crate::pcs::kzg10::{KZG12_381, KzgField};
+    use crate::pcs::kzg10::KzgField;
     use crate::plookup::scheme::Plookup;
     use crate::plookup::transcript_label::TranscriptLabel;
+    use crate::row::{ints_to_fields, Row};
     use crate::template_table::xor::XorTable;
     use crate::transcript::TranscriptProtocol;
     use crate::types::Domain;
@@ -426,7 +423,7 @@ mod test {
     fn compute_h1_h2() {
         let f = ints_to_fields::<KzgField>(&[5, 2, 2, 4, 4]);
         let t = ints_to_fields::<KzgField>(&[5, 3, 4, 2, 6, 7]);
-        let (h1, h2) = Plookup::<KzgField, KZG12_381>::compute_h1_h2(&f, &t).unwrap();
+        let (h1, h2) = Plookup::<KzgField, KzgScheme>::compute_h1_h2(&f, &t).unwrap();
         assert_eq!(h1, ints_to_fields::<KzgField>(&[5, 5, 3, 4, 4, 4]));
         assert_eq!(h2, ints_to_fields::<KzgField>(&[4, 2, 2, 2, 6, 7]));
     }
@@ -442,17 +439,17 @@ mod test {
     /// This test will panic if adding the valid witness fails.
     fn add_witness() {
         let t = XorTable::new(4).table().clone();
-        let pcs = KZG12_381::new(t.len() * 2 + 3);
+        let pcs = KzgScheme::new(Srs::new(t.len() * 2 + 3));
         let mut lookup = Plookup::<KzgField>::new(t, pcs);
         lookup
-            .add_witness(Multiset(vec![
+            .add_witness(Row(vec![
                 KzgField::from(6),
                 KzgField::from(5),
                 KzgField::from(5 ^ 6),
             ]))
             .unwrap();
         assert!(lookup
-            .add_witness(Multiset(vec![
+            .add_witness(Row(vec![
                 KzgField::from(3651),
                 KzgField::from(5),
                 KzgField::from(5 ^ 6),
@@ -495,7 +492,7 @@ mod test {
 
         for test in 0..TEST_CASES {
             let mut transcript = TranscriptProtocol::<KzgField>::new(TranscriptLabel::NAME);
-            let pcs = KZG12_381::new(t.len() * 2 + 5);
+            let pcs = KzgScheme::new(Srs::new(t.len() * 2 + 5));
             let mut lookup = Plookup::<KzgField>::new(t.clone(), pcs);
             let w = rnd.gen_range(1..=l);
             let mut v = vec![];
@@ -509,7 +506,7 @@ mod test {
             let proof = lookup.prove(&mut transcript);
             let mut verifier_transcript =
                 TranscriptProtocol::<KzgField>::new(TranscriptLabel::NAME);
-            assert!(lookup.verify(&mut verifier_transcript, &proof));
+            assert!(lookup.verify(&mut verifier_transcript, &proof).unwrap());
             println!("Test {} passed, v = {:?}", test, v);
         }
     }
