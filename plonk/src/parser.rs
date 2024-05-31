@@ -1,9 +1,12 @@
-use crate::circuit::Circuit;
-use crate::parser::TypeOfCircuit::*;
-use ark_bls12_381::Fr;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Neg;
+
+use ark_bls12_381::Fr;
+use ark_ff::Zero;
+
+use crate::circuit::Circuit;
+use crate::parser::TypeOfCircuit::*;
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 enum TypeOfCircuit {
@@ -137,7 +140,17 @@ impl Parser {
                 split_list
                     .split('*')
                     .map(|s| s.trim().to_string())
-                    .map(|s| Wire::new(s.clone(), self.get_witness_value(&s)))
+                    .map(|s| {
+                        Wire::new(
+                            s.clone(),
+                            self.get_witness_value(
+                                &s,
+                                &mut gate_list.borrow_mut(),
+                                &mut gate_set.borrow_mut(),
+                                &mut position_map.borrow_mut(),
+                            ),
+                        )
+                    })
                     .collect::<Vec<Wire>>()
             })
             .map(|multi_collections| {
@@ -286,8 +299,46 @@ impl Parser {
         result
     }
 
-    /// Get the value of [value] in Fr
-    fn get_witness_value(&self, mut value: &str) -> Fr {
+    /// Generate constant gate
+    ///
+    /// Take in `value` to make constant gate.
+    /// Constant gate ensure the prover send the correct polynomial
+    fn generate_constant_gate(
+        &self,
+        gate_list: &mut Vec<Gate>,
+        gate_set: &mut HashSet<Gate>,
+        position_map: &mut HashMap<String, Vec<(usize, usize)>>,
+        value: Wire,
+    ) -> Wire {
+        let gate_number = gate_list.len();
+        let right = Wire::new("0".to_string(), Fr::zero());
+        let result = Wire::new(
+            format!("{}+{}", &value.value_string, "0"),
+            value.value_fr + Fr::zero(),
+        );
+        let gate = Gate::new(value.clone(), right.clone(), result.clone(), Constant);
+        //if this gate already exist, skip this move
+        if gate_set.get(&gate).is_some() {
+            return result;
+        }
+        gate_list.push(gate.clone());
+        gate_set.insert(gate);
+
+        Self::push_into_position_map_or_insert(0, gate_number, position_map, &value.value_string);
+        Self::push_into_position_map_or_insert(1, gate_number, position_map, "0");
+        Self::push_into_position_map_or_insert(2, gate_number, position_map, &result.value_string);
+        result
+    }
+
+    /// Get the value of `value` in Fr
+    /// if value is a constant insert a constant gate
+    fn get_witness_value(
+        &self,
+        mut value: &str,
+        gate_list: &mut Vec<Gate>,
+        gate_set: &mut HashSet<Gate>,
+        position_map: &mut HashMap<String, Vec<(usize, usize)>>,
+    ) -> Fr {
         let mut is_negative = false;
         if &value[..1] == "-" {
             is_negative = true;
@@ -297,7 +348,19 @@ impl Parser {
             //Not a constant, search in map
             Some(value) => *value,
             //Value is a constant insert a constant gate
-            None => Fr::from(value.parse::<i32>().unwrap()),
+            None => {
+                let constant = value.parse::<i32>().unwrap();
+                let wire = if is_negative {
+                    Wire::new("-".to_string() + constant.to_string().as_str(),
+                              Fr::from(constant).neg())
+                } else {
+                    Wire::new(constant.to_string(),
+                              Fr::from(constant))
+                };
+                println!("{:?} {}", wire, is_negative);
+                self.generate_constant_gate(gate_list, gate_set, position_map, wire.clone());
+                Fr::from(constant)
+            }
         };
         if is_negative {
             result.neg()
@@ -365,11 +428,12 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+    use ark_bls12_381::Fr;
+    use sha2::Sha256;
+
     use crate::circuit::Circuit;
     use crate::parser::Parser;
     use crate::{prover, verifier};
-    use ark_bls12_381::Fr;
-    use sha2::Sha256;
 
     /// Test generated circuit with prover
     #[test]
@@ -385,6 +449,41 @@ mod tests {
         assert!(verifier::verify::<Sha256>(&compiled_circuit, proof).is_ok());
     }
 
+    /// Test generated circuit with prover
+    #[test]
+    fn parser_constant_test() {
+        let mut parser = Parser::default();
+        parser.add_witness("x", Fr::from(1));
+        parser.add_witness("y", Fr::from(2));
+        parser.add_witness("z", Fr::from(3));
+        let compiled_circuit = parser.parse("x*y+3*x^2+x*y*z=11").compile().unwrap();
+
+        let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
+
+        let mut parser1 = Parser::default();
+        parser1.add_witness("x", Fr::from(1));
+        parser1.add_witness("y", Fr::from(2));
+        parser1.add_witness("z", Fr::from(4));
+        let compiled_circuit1 = parser1.parse("x*y+3*x^2+x*y*z=13").compile().unwrap();
+
+        let proof1 = prover::generate_proof::<Sha256>(&compiled_circuit1);
+
+        assert!(verifier::verify::<Sha256>(&compiled_circuit, proof1).is_err());
+        assert!(verifier::verify::<Sha256>(&compiled_circuit1, proof).is_err());
+    }
+
+    #[should_panic]
+    #[test]
+    fn parser_false_witness_test() {
+        let mut parser = Parser::default();
+        parser.add_witness("x", Fr::from(1));
+        parser.add_witness("y", Fr::from(2));
+        parser.add_witness("z", Fr::from(3));
+        let compiled_circuit = parser.parse("x+y+z=0").compile().unwrap();
+
+        let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
+    }
+
     /// Test generated circuit with expected circuit
     #[test]
     fn parser_circuit_test() {
@@ -393,55 +492,70 @@ mod tests {
         parser.add_witness("y", Fr::from(2));
         parser.add_witness("z", Fr::from(3));
         let generated_circuit = parser.parse("x*y+3*x*x+x*y*z=11");
+        println!("{:?}", generated_circuit);
 
         let hand_written_circuit = Circuit::default()
             .add_multiplication_gate(
                 // gate 0
-                (1, 1, Fr::from(1)),
+                (1, 2, Fr::from(1)),
                 (1, 0, Fr::from(2)),
-                (0, 3, Fr::from(2)),
+                (0, 4, Fr::from(2)),
                 Fr::from(0),
             )
-            .add_multiplication_gate(
+            .add_constant_gate(
                 // gate 1
-                (0, 1, Fr::from(3)),
-                (1, 2, Fr::from(1)),
                 (0, 2, Fr::from(3)),
+                (1, 7, Fr::from(0)),
+                (2, 1, Fr::from(3)),
                 Fr::from(0),
             )
             .add_multiplication_gate(
                 // gate 2
-                (2, 1, Fr::from(3)),
-                (0, 0, Fr::from(1)),
-                (1, 3, Fr::from(3)),
-                Fr::from(0),
-            )
-            .add_addition_gate(
-                // gate 3
-                (0, 4, Fr::from(2)),
-                (2, 2, Fr::from(3)),
-                (0, 5, Fr::from(5)),
+                (0, 1, Fr::from(3)),
+                (1, 3, Fr::from(1)),
+                (0, 3, Fr::from(3)),
                 Fr::from(0),
             )
             .add_multiplication_gate(
-                // gate 4
-                (2, 0, Fr::from(2)),
+                // gate 3
+                (2, 2, Fr::from(3)),
+                (0, 0, Fr::from(1)),
                 (1, 4, Fr::from(3)),
-                (1, 5, Fr::from(6)),
                 Fr::from(0),
             )
             .add_addition_gate(
-                //gate 5
-                (2, 3, Fr::from(5)),
-                (2, 4, Fr::from(6)),
-                (0, 6, Fr::from(11)),
+                // gate 4
+                (0, 5, Fr::from(2)),
+                (2, 3, Fr::from(3)),
+                (0, 6, Fr::from(5)),
+                Fr::from(0),
+            )
+            .add_multiplication_gate(
+                // gate 5
+                (2, 0, Fr::from(2)),
+                (1, 5, Fr::from(3)),
+                (1, 6, Fr::from(6)),
                 Fr::from(0),
             )
             .add_addition_gate(
                 //gate 6
-                (2, 5, Fr::from(11)),
-                (1, 6, Fr::from(-11)),
-                (2, 6, Fr::from(0)),
+                (2, 4, Fr::from(5)),
+                (2, 5, Fr::from(6)),
+                (0, 8, Fr::from(11)),
+                Fr::from(0),
+            )
+            .add_constant_gate(
+                // gate 7
+                (1, 8, Fr::from(-11)),
+                (1, 1, Fr::from(0)),
+                (2, 7, Fr::from(-11)),
+                Fr::from(0),
+            )
+            .add_addition_gate(
+                //gate 8
+                (2, 6, Fr::from(11)),
+                (0, 7, Fr::from(-11)),
+                (2, 8, Fr::from(0)),
                 Fr::from(0),
             );
 
