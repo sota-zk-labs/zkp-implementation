@@ -351,11 +351,12 @@ impl Parser {
             None => {
                 let constant = value.parse::<i32>().unwrap();
                 let wire = if is_negative {
-                    Wire::new("-".to_string() + constant.to_string().as_str(),
-                              Fr::from(constant).neg())
+                    Wire::new(
+                        "-".to_string() + constant.to_string().as_str(),
+                        Fr::from(constant).neg(),
+                    )
                 } else {
-                    Wire::new(constant.to_string(),
-                              Fr::from(constant))
+                    Wire::new(constant.to_string(), Fr::from(constant))
                 };
                 println!("{:?} {}", wire, is_negative);
                 self.generate_constant_gate(gate_list, gate_set, position_map, wire.clone());
@@ -398,6 +399,7 @@ impl Parser {
         let string = string.to_lowercase();
         let mut result = String::new();
         let mut last_char = ' ';
+        let mut number_buffer = String::new();
         let mut flag = false;
         for char in string.chars() {
             if char == ' ' {
@@ -405,19 +407,35 @@ impl Parser {
             }
             if char == '^' {
                 flag = true;
-            } else if flag {
-                if char.is_numeric() {
-                    for _ in 0..char.to_string().parse::<i32>().unwrap() - 1 {
-                        result.push('*');
-                        result.push(last_char);
+            } else if !char.is_numeric() {
+                if flag {
+                    if !number_buffer.is_empty() {
+                        for _ in 0..number_buffer.parse::<i32>().unwrap() - 1 {
+                            result.push('*');
+                            result.push(last_char);
+                        }
+                        flag = false;
+                    } else {
+                        panic!("can't parse polynomial")
                     }
-                    flag = false;
-                } else {
-                    panic!("can't parse polynomial")
                 }
-            } else {
+                println!("before {}", char);
                 last_char = char;
                 result.push(char);
+                println!("after {}", char);
+                number_buffer = String::new();
+            } else {
+                number_buffer.push(char);
+                if !flag {
+                    last_char = char;
+                    result.push(char);
+                }
+            }
+        }
+        if flag && !number_buffer.is_empty() {
+            for _ in 0..number_buffer.parse::<i32>().unwrap() - 1 {
+                result.push('*');
+                result.push(last_char);
             }
         }
         result
@@ -482,6 +500,7 @@ mod tests {
         let compiled_circuit = parser.parse("x+y+z=0").compile().unwrap();
 
         let proof = prover::generate_proof::<Sha256>(&compiled_circuit);
+        assert!(verifier::verify::<Sha256>(&compiled_circuit, proof).is_err());
     }
 
     /// Test generated circuit with expected circuit
@@ -608,5 +627,10 @@ mod tests {
     #[should_panic]
     fn parse_string_panic_test() {
         let _result = Parser::parse_string("x * y + 3 * x ^ x + x * y * z=0");
+    }
+
+    #[test]
+    fn parse_string_high_degree_test() {
+        let _result = Parser::parse_string("x^ 100 + x^10 = x^2");
     }
 }
