@@ -8,16 +8,17 @@ edition = "2021"
 name = "plonk-example"
 path = "examples/example.rs"
 
+
 [dependencies]
 ark-ff = "0.4.2"
 ark-poly = "0.4.2"
 ark-ec = "0.4.2"
 ark-bls12-381 = "0.4.0"
 ark-serialize = "0.4.2"
-ark-std = "0.4.0"
-rand = "0.8.5"
+ark-std = { version = "0.4.0", default-features = false }
 sha2 = "0.10"
 kzg = { path = "../kzg" }
+clap = { version = "4.5.4", features = ["derive"] }
 
 [dependencies.digest]
 version = "0.10"

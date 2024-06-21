@@ -2,7 +2,7 @@ use ark_bls12_381::Fr;
 use ark_ff::{One, Zero};
 
 /// Enum representing the position of a wire in a gate.
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Position {
     /// Dummy position indicating no wire connection.
     Dummy,
@@ -10,8 +10,8 @@ pub enum Position {
     Pos(usize, usize),
 }
 
+#[derive(Clone, PartialEq, Debug)]
 /// Struct representing a gate in the circuit.
-#[derive(PartialEq, Debug)]
 pub struct Gate {
     /// Position of the input wire A.
     a_pos: Position,
@@ -55,7 +55,7 @@ impl Gate {
     }
 
     /// Creates a new multiplication gate.
-    pub(crate) fn new_mult_gate(
+    pub(crate) fn new_mul_gate(
         a_pos: Position,
         b_pos: Position,
         c_pos: Position,
