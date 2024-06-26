@@ -8,6 +8,7 @@ use digest::Digest;
 
 use kzg::commitment::KzgCommitment;
 use kzg::scheme::KzgScheme;
+use kzg::srs::Srs;
 
 use crate::challenge::ChallengeGenerator;
 use crate::compiled_circuit::CompiledCircuit;
@@ -17,26 +18,28 @@ use crate::prover::Proof;
 ///
 pub fn verify<T: Digest + Default>(
     compiled_circuit: &CompiledCircuit,
+    srs: Srs,
     proof: Proof,
 ) -> Result<(), String> {
     println!("Verifying...");
 
     #[cfg(test)]
     println!("Precompute");
+
+    let scheme = KzgScheme::new(srs.clone());
+
     let (q_m_c, q_l_c, q_r_c, q_o_c, q_c_c, s_sigma_1_c, s_sigma_2_c, s_sigma_3_c) =
-        get_circuit_commitment(compiled_circuit);
+        get_circuit_commitment(compiled_circuit, &scheme);
 
     #[cfg(test)]
     println!("Verify challenges");
-    let (alpha, beta, gamma, evaluation_challenge, v, u) =
-        verify_challenges::<T>(&proof, compiled_circuit);
+    let (alpha, beta, gamma, evaluation_challenge, v, u) = verify_challenges::<T>(&proof, &scheme);
 
     if u != proof.u {
         return Err(String::from("Verify: Challenge verification failed."));
     }
 
     let domain = <GeneralEvaluationDomain<Fr>>::new(compiled_circuit.size).unwrap();
-    let scheme = KzgScheme::new(compiled_circuit.srs());
     let w = domain.element(1);
 
     let z_h_e = evaluation_challenge.pow(BigInt::new([domain.size() as u64])) - Fr::from(1);
@@ -124,7 +127,7 @@ pub fn verify<T: Digest + Default>(
 
     let pairing_left_side = Bls12_381::pairing(
         (proof.w_ev_x_commit.clone() + proof.w_ev_wx_commit.clone().mul(u)).0,
-        compiled_circuit.srs().g2s(),
+        srs.g2s(),
     );
 
     #[cfg(test)]
@@ -138,7 +141,7 @@ pub fn verify<T: Digest + Default>(
             + f
             - e)
             .0,
-        compiled_circuit.srs().g2(),
+        srs.g2(),
     );
 
     #[cfg(test)]
@@ -156,6 +159,7 @@ pub fn verify<T: Digest + Default>(
 /// Gets commitments of the circuit via compiled_circuit
 fn get_circuit_commitment(
     compiled_circuit: &CompiledCircuit,
+    scheme: &KzgScheme,
 ) -> (
     KzgCommitment,
     KzgCommitment,
@@ -166,15 +170,14 @@ fn get_circuit_commitment(
     KzgCommitment,
     KzgCommitment,
 ) {
-    let scheme = KzgScheme::new(compiled_circuit.srs());
     let q_m_c = scheme.commit(compiled_circuit.gate_constraints().q_mx());
     let q_l_c = scheme.commit(compiled_circuit.gate_constraints().q_lx());
     let q_r_c = scheme.commit(compiled_circuit.gate_constraints().q_rx());
     let q_o_c = scheme.commit(compiled_circuit.gate_constraints().q_ox());
     let q_c_c = scheme.commit(compiled_circuit.gate_constraints().q_cx());
-    let s_sigma1_c = scheme.commit(compiled_circuit.copy_constraints().get_s_sigma_1());
-    let s_sigma2_c = scheme.commit(compiled_circuit.copy_constraints().get_s_sigma_2());
-    let s_sigma3_c = scheme.commit(compiled_circuit.copy_constraints().get_s_sigma_3());
+    let s_sigma1_c = scheme.commit(compiled_circuit.copy_constraints().s_sigma_1());
+    let s_sigma2_c = scheme.commit(compiled_circuit.copy_constraints().s_sigma_2());
+    let s_sigma3_c = scheme.commit(compiled_circuit.copy_constraints().s_sigma_3());
 
     (
         q_m_c, q_l_c, q_r_c, q_o_c, q_c_c, s_sigma1_c, s_sigma2_c, s_sigma3_c,
@@ -184,15 +187,14 @@ fn get_circuit_commitment(
 /// Verifies Fiat-Shamir challenges.
 fn verify_challenges<T: Digest + Default>(
     proof: &Proof,
-    compiled_circuit: &CompiledCircuit,
+    scheme: &KzgScheme,
 ) -> (Fr, Fr, Fr, Fr, Fr, Fr) {
-    let scheme = KzgScheme::new(compiled_circuit.srs());
     let commitments = [
         proof.a_commit.clone(),
         proof.b_commit.clone(),
         proof.c_commit.clone(),
     ];
-    let mut challenge = ChallengeGenerator::<T>::from_commitment(&commitments);
+    let mut challenge = ChallengeGenerator::<T>::from_commitments(&commitments);
     let [beta, gamma] = challenge.generate_challenges();
     challenge.feed(&proof.z_commit);
     let [alpha] = challenge.generate_challenges();
@@ -229,147 +231,153 @@ mod tests {
     #[test]
     fn verifier_accepted_test_01() {
         // check x^2 + y^2 = z^2.
-        let compile_circuit = Circuit::default()
-            .add_multiplication_gate(
-                (1, 0, Fr::from(3)),
-                (0, 0, Fr::from(3)),
-                (0, 3, Fr::from(9)),
-                Fr::from(0),
-            )
-            .add_multiplication_gate(
-                (1, 1, Fr::from(4)),
-                (0, 1, Fr::from(4)),
-                (1, 3, Fr::from(16)),
-                Fr::from(0),
-            )
-            .add_multiplication_gate(
-                (1, 2, Fr::from(5)),
-                (0, 2, Fr::from(5)),
-                (2, 3, Fr::from(25)),
-                Fr::from(0),
-            )
-            .add_addition_gate(
-                (2, 0, Fr::from(9)),
-                (2, 1, Fr::from(16)),
-                (2, 2, Fr::from(25)),
-                Fr::from(0),
-            )
-            .compile()
-            .unwrap();
+        let mut circuit = Circuit::default();
+        circuit.add_multiplication_gate(
+            (1, 0, Fr::from(3)),
+            (0, 0, Fr::from(3)),
+            (0, 3, Fr::from(9)),
+            Fr::from(0),
+        );
+        circuit.add_multiplication_gate(
+            (1, 1, Fr::from(4)),
+            (0, 1, Fr::from(4)),
+            (1, 3, Fr::from(16)),
+            Fr::from(0),
+        );
+        circuit.add_multiplication_gate(
+            (1, 2, Fr::from(5)),
+            (0, 2, Fr::from(5)),
+            (2, 3, Fr::from(25)),
+            Fr::from(0),
+        );
+        circuit.add_addition_gate(
+            (2, 0, Fr::from(9)),
+            (2, 1, Fr::from(16)),
+            (2, 2, Fr::from(25)),
+            Fr::from(0),
+        );
 
-        let proof = generate_proof::<Sha256>(&compile_circuit);
-        assert!(verify::<Sha256>(&compile_circuit, proof).is_ok());
+        let compiled_circuit = circuit.compile().unwrap();
+
+        let srs = Srs::new(compiled_circuit.size);
+
+        let proof = generate_proof::<Sha256>(&compiled_circuit, srs.clone());
+        assert!(verify::<Sha256>(&compiled_circuit, srs, proof).is_ok());
     }
 
     #[test]
     #[should_panic]
     fn verifier_rejected_test_01() {
         // check: x^2 + y^2 = z^2
-        let compile_circuit = Circuit::default()
-            .add_multiplication_gate(
-                (1, 0, Fr::from(3)),
-                (0, 0, Fr::from(3)),
-                (0, 3, Fr::from(9)),
-                Fr::from(0),
-            )
-            .add_multiplication_gate(
-                (1, 1, Fr::from(4)),
-                (0, 1, Fr::from(4)),
-                (1, 3, Fr::from(16)),
-                Fr::from(0),
-            )
-            .add_multiplication_gate(
-                (1, 2, Fr::from(5)),
-                (0, 2, Fr::from(5)),
-                (2, 3, Fr::from(25)),
-                Fr::from(0),
-            )
-            .add_addition_gate(
-                (2, 0, Fr::from(9)),
-                (2, 1, Fr::from(16)),
-                (2, 2, Fr::from(20)),
-                Fr::from(0),
-            )
-            .compile()
-            .unwrap();
+        let mut circuit = Circuit::default();
+        circuit.add_multiplication_gate(
+            (1, 0, Fr::from(3)),
+            (0, 0, Fr::from(3)),
+            (0, 3, Fr::from(9)),
+            Fr::from(0),
+        );
+        circuit.add_multiplication_gate(
+            (1, 1, Fr::from(4)),
+            (0, 1, Fr::from(4)),
+            (1, 3, Fr::from(16)),
+            Fr::from(0),
+        );
+        circuit.add_multiplication_gate(
+            (1, 2, Fr::from(5)),
+            (0, 2, Fr::from(5)),
+            (2, 3, Fr::from(25)),
+            Fr::from(0),
+        );
+        circuit.add_addition_gate(
+            (2, 0, Fr::from(9)),
+            (2, 1, Fr::from(16)),
+            (2, 2, Fr::from(20)),
+            Fr::from(0),
+        );
+        let compiled_circuit = circuit.compile().unwrap();
 
-        let proof = generate_proof::<Sha256>(&compile_circuit);
-        assert!(verify::<Sha256>(&compile_circuit, proof).is_ok());
+        let srs = Srs::new(compiled_circuit.size);
+
+        let proof = generate_proof::<Sha256>(&compiled_circuit, srs.clone());
+        assert!(verify::<Sha256>(&compiled_circuit, srs, proof).is_ok());
     }
 
     #[test]
     fn verifier_accepted_test_02() {
         // check xy + 3x^2 + xyz = 11
 
-        let circuit = Circuit::default()
-            .add_multiplication_gate(
-                (0, 1, Fr::from(1)),
-                (1, 0, Fr::from(2)),
-                (0, 3, Fr::from(2)),
-                Fr::from(0),
-            )
-            .add_multiplication_gate(
-                (1, 1, Fr::from(1)),
-                (0, 0, Fr::from(1)),
-                (0, 2, Fr::from(1)),
-                Fr::from(0),
-            )
-            .add_multiplication_gate(
-                (2, 1, Fr::from(1)),
-                (2, 6, Fr::from(3)),
-                (1, 3, Fr::from(3)),
-                Fr::from(0),
-            )
-            .add_addition_gate(
-                (0, 4, Fr::from(2)),
-                (2, 2, Fr::from(3)),
-                (0, 5, Fr::from(5)),
-                Fr::from(0),
-            )
-            .add_multiplication_gate(
-                (2, 0, Fr::from(2)),
-                (1, 4, Fr::from(3)),
-                (1, 5, Fr::from(6)),
-                Fr::from(0),
-            )
-            .add_addition_gate(
-                (2, 3, Fr::from(5)),
-                (2, 4, Fr::from(6)),
-                (2, 5, Fr::from(11)),
-                Fr::from(0),
-            )
-            .add_constant_gate(
-                (0, 6, Fr::from(3)),
-                (1, 6, Fr::from(0)),
-                (1, 2, Fr::from(3)),
-                Fr::from(0),
-            );
-        let compile_circuit = circuit.compile().unwrap();
+        let mut circuit = Circuit::default();
+        circuit.add_multiplication_gate(
+            (0, 1, Fr::from(1)),
+            (1, 0, Fr::from(2)),
+            (0, 3, Fr::from(2)),
+            Fr::from(0),
+        );
+        circuit.add_multiplication_gate(
+            (1, 1, Fr::from(1)),
+            (0, 0, Fr::from(1)),
+            (0, 2, Fr::from(1)),
+            Fr::from(0),
+        );
+        circuit.add_multiplication_gate(
+            (2, 1, Fr::from(1)),
+            (2, 6, Fr::from(3)),
+            (1, 3, Fr::from(3)),
+            Fr::from(0),
+        );
+        circuit.add_addition_gate(
+            (0, 4, Fr::from(2)),
+            (2, 2, Fr::from(3)),
+            (0, 5, Fr::from(5)),
+            Fr::from(0),
+        );
+        circuit.add_multiplication_gate(
+            (2, 0, Fr::from(2)),
+            (1, 4, Fr::from(3)),
+            (1, 5, Fr::from(6)),
+            Fr::from(0),
+        );
+        circuit.add_addition_gate(
+            (2, 3, Fr::from(5)),
+            (2, 4, Fr::from(6)),
+            (2, 5, Fr::from(11)),
+            Fr::from(0),
+        );
+        circuit.add_constant_gate(
+            (0, 6, Fr::from(3)),
+            (1, 6, Fr::from(0)),
+            (1, 2, Fr::from(3)),
+            Fr::from(0),
+        );
+        let compiled_circuit = circuit.compile().unwrap();
 
-        let proof = generate_proof::<Sha256>(&compile_circuit);
-        assert!(verify::<Sha256>(&compile_circuit, proof).is_ok());
+        let srs = Srs::new(compiled_circuit.size);
+
+        let proof = generate_proof::<Sha256>(&compiled_circuit, srs.clone());
+        assert!(verify::<Sha256>(&compiled_circuit, srs, proof).is_ok());
     }
 
     #[test]
     fn verifier_accepted_test_03() {
         // check xyz = 6
-        let compile_circuit = Circuit::default()
-            .add_multiplication_gate(
-                (0, 0, Fr::from(1)),
-                (1, 0, Fr::from(2)),
-                (0, 1, Fr::from(2)),
-                Fr::from(0),
-            )
-            .add_multiplication_gate(
-                (2, 0, Fr::from(2)),
-                (1, 1, Fr::from(3)),
-                (2, 1, Fr::from(6)),
-                Fr::from(0),
-            )
-            .compile()
-            .unwrap();
+        let mut circuit = Circuit::default();
+        circuit.add_multiplication_gate(
+            (0, 0, Fr::from(1)),
+            (1, 0, Fr::from(2)),
+            (0, 1, Fr::from(2)),
+            Fr::from(0),
+        );
+        circuit.add_multiplication_gate(
+            (2, 0, Fr::from(2)),
+            (1, 1, Fr::from(3)),
+            (2, 1, Fr::from(6)),
+            Fr::from(0),
+        );
+        let compiled_circuit = circuit.compile().unwrap();
 
-        let proof = generate_proof::<Sha256>(&compile_circuit);
-        assert!(verify::<Sha256>(&compile_circuit, proof).is_ok());
+        let srs = Srs::new(compiled_circuit.size);
+
+        let proof = generate_proof::<Sha256>(&compiled_circuit, srs.clone());
+        assert!(verify::<Sha256>(&compiled_circuit, srs, proof).is_ok());
     }
 }

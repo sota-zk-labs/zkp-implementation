@@ -6,11 +6,14 @@ use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial};
 use ark_poly::{
     DenseUVPolynomial, EvaluationDomain, Evaluations, GeneralEvaluationDomain, Polynomial as Poly,
 };
+use ark_std::rand::rngs::StdRng;
+use ark_std::rand::SeedableRng;
 use digest::Digest;
 use sha2::Sha256;
 
 use kzg::commitment::KzgCommitment;
 use kzg::scheme::KzgScheme;
+use kzg::srs::Srs;
 
 use crate::challenge::ChallengeGenerator;
 use crate::compiled_circuit::CompiledCircuit;
@@ -19,7 +22,6 @@ use crate::types::Polynomial;
 
 /// Struct representing a proof.
 pub struct Proof {
-    /// Commitment of wire polynomial a(x)
     pub a_commit: KzgCommitment,
     /// Commitment of wire polynomial b(x)
     pub b_commit: KzgCommitment,
@@ -37,17 +39,17 @@ pub struct Proof {
     pub w_ev_x_commit: KzgCommitment,
     /// Commitment of opening proof polynomial w_ev_wx
     pub w_ev_wx_commit: KzgCommitment,
-    /// Opening evaluations of a(x)
+    /// Opening evaluation of a(x)
     pub bar_a: Fr,
-    /// Opening evaluations of b(x)
+    /// Opening evaluation of b(x)
     pub bar_b: Fr,
-    /// Opening evaluations of c(x)
+    /// Opening evaluation of c(x)
     pub bar_c: Fr,
-    /// Opening evaluations of s_sigma_1(x)
+    /// Opening evaluation of s_sigma_1(x)
     pub bar_s_sigma_1: Fr,
-    /// Opening evaluations of s_sigma_2(x)
+    /// Opening evaluation of s_sigma_2(x)
     pub bar_s_sigma_2: Fr,
-    /// Opening evaluations of z_w(x)
+    /// Opening evaluation of z_w(x)
     pub bar_z_w: Fr,
     /// Multipoint evaluation challenge
     pub u: Fr,
@@ -56,15 +58,15 @@ pub struct Proof {
 }
 
 /// Generates a proof for the compiled circuit.
-pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -> Proof {
+pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit, srs: Srs) -> Proof {
     println!("Generating proof...");
 
     // Round 1
     #[cfg(test)]
     println!("ROUND 1");
 
-    let mut rng = rand::thread_rng();
-    let scheme = KzgScheme::new(compiled_circuit.srs().clone());
+    let mut rng = StdRng::from_entropy();
+    let scheme = KzgScheme::new(srs);
     let domain = <GeneralEvaluationDomain<Fr>>::new(compiled_circuit.size).unwrap();
 
     let b1 = Fr::rand(&mut rng);
@@ -89,7 +91,7 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
 
     let [a_commit, b_commit, c_commit] = commit_round1(&ax, &bx, &cx, &scheme);
 
-    // round2
+    // Round 2
     #[cfg(test)]
     println!("ROUND 2");
 
@@ -124,7 +126,7 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
     #[cfg(test)]
     assert_eq!(z_x.evaluate(&(w * beta)), z_wx.evaluate(&beta));
 
-    // round 3
+    // Round 3
     #[cfg(test)]
     println!("ROUND 3");
 
@@ -143,11 +145,11 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
         &domain,
         compiled_circuit,
     );
-    // split t into 3 parts
-    let slice_poly = SlicePoly::new(tx, domain.size());
+
+    let slice_poly = SlicePoly::new(tx);
     let [t_lo_commit, t_mid_commit, t_hi_commit] = slice_poly.commit(&scheme);
 
-    // round 4
+    // Round 4
     #[cfg(test)]
     println!("ROUND 4");
 
@@ -162,11 +164,11 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
     let bar_c = cx.evaluate(&evaluation_challenge);
     let bar_s_sigma_1 = compiled_circuit
         .copy_constraints()
-        .get_s_sigma_1()
+        .s_sigma_1()
         .evaluate(&evaluation_challenge);
     let bar_s_sigma_2 = compiled_circuit
         .copy_constraints()
-        .get_s_sigma_2()
+        .s_sigma_2()
         .evaluate(&evaluation_challenge);
     let bar_z_w = z_x.evaluate(&(evaluation_challenge * w));
     let pi_e = compiled_circuit
@@ -175,7 +177,7 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
         .evaluate(&evaluation_challenge);
     let tx_compact = slice_poly.compact(&evaluation_challenge);
 
-    // round 5
+    // Round 5
     #[cfg(test)]
     println!("ROUND 5");
     challenge.feed(&scheme.commit_para(bar_a));
@@ -214,17 +216,17 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
         + poly_sub_para(&bx, &bar_b).mul(v.square())
         + poly_sub_para(&cx, &bar_c).mul(v * v * v)
         + poly_sub_para(
-            compiled_circuit.copy_constraints().get_s_sigma_1(),
+            compiled_circuit.copy_constraints().s_sigma_1(),
             &bar_s_sigma_1,
         )
         .mul(v * v * v * v)
         + poly_sub_para(
-            compiled_circuit.copy_constraints().get_s_sigma_2(),
+            compiled_circuit.copy_constraints().s_sigma_2(),
             &bar_s_sigma_2,
         )
         .mul(v * v * v * v * v);
 
-    // check w_ev_x
+    // Check w_ev_x
     {
         let cur = DensePolynomial::from_coefficients_vec(vec![-evaluation_challenge, Fr::from(1)]);
         let a = DenseOrSparsePolynomial::from(w_ev_x.clone());
@@ -243,7 +245,7 @@ pub fn generate_proof<T: Digest + Default>(compiled_circuit: &CompiledCircuit) -
     ]));
     let w_ev_wx = poly_sub_para(&z_x, &bar_z_w);
 
-    // check w_ev_wx
+    // Check w_ev_wx
     {
         let cur =
             DensePolynomial::from_coefficients_vec(vec![-evaluation_challenge * w, Fr::from(1)]);
@@ -338,7 +340,7 @@ fn compute_acc(
             + *beta
                 * compiled_circuit
                     .copy_constraints()
-                    .get_s_sigma_1()
+                    .s_sigma_1()
                     .evaluate(w_i_sub1)
             + *gamma)
             * (compiled_circuit
@@ -348,7 +350,7 @@ fn compute_acc(
                 + *beta
                     * compiled_circuit
                         .copy_constraints()
-                        .get_s_sigma_2()
+                        .s_sigma_2()
                         .evaluate(w_i_sub1)
                 + *gamma)
             * (compiled_circuit
@@ -358,7 +360,7 @@ fn compute_acc(
                 + *beta
                     * compiled_circuit
                         .copy_constraints()
-                        .get_s_sigma_3()
+                        .s_sigma_3()
                         .evaluate(w_i_sub1)
                 + *gamma);
 
@@ -408,25 +410,16 @@ fn compute_quotient_polynomial(
         .mul(*alpha);
 
     let line3 = (ax.clone()
-        + compiled_circuit
-            .copy_constraints()
-            .get_s_sigma_1()
-            .mul(*beta)
+        + compiled_circuit.copy_constraints().s_sigma_1().mul(*beta)
         + DensePolynomial::from_coefficients_vec(vec![*gamma]))
     .mul(
         &(bx.clone()
-            + compiled_circuit
-                .copy_constraints()
-                .get_s_sigma_2()
-                .mul(*beta)
+            + compiled_circuit.copy_constraints().s_sigma_2().mul(*beta)
             + DensePolynomial::from_coefficients_vec(vec![*gamma])),
     )
     .mul(
         &(cx.clone()
-            + compiled_circuit
-                .copy_constraints()
-                .get_s_sigma_3()
-                .mul(*beta)
+            + compiled_circuit.copy_constraints().s_sigma_3().mul(*beta)
             + DensePolynomial::from_coefficients_vec(vec![*gamma])),
     )
     .mul(z_wx)
@@ -514,10 +507,7 @@ fn compute_linearisation_polynomial(
         * (*bar_b + *beta * bar_s_sigma_2 + gamma)
         * bar_z_w
         * alpha;
-    let mut tmp2 = compiled_circuit
-        .copy_constraints()
-        .get_s_sigma_3()
-        .mul(*beta);
+    let mut tmp2 = compiled_circuit.copy_constraints().s_sigma_3().mul(*beta);
     tmp2.coeffs[0] += *bar_c + gamma;
     let line3 = tmp2.mul(line3);
 
@@ -542,25 +532,16 @@ fn compute_linearisation_polynomial(
             .mul(z_x);
 
         let line32 = (ax.clone()
-            + compiled_circuit
-                .copy_constraints()
-                .get_s_sigma_1()
-                .mul(*beta)
+            + compiled_circuit.copy_constraints().s_sigma_1().mul(*beta)
             + DensePolynomial::from_coefficients_vec(vec![*gamma]))
         .mul(
             &(bx.clone()
-                + compiled_circuit
-                    .copy_constraints()
-                    .get_s_sigma_2()
-                    .mul(*beta)
+                + compiled_circuit.copy_constraints().s_sigma_2().mul(*beta)
                 + DensePolynomial::from_coefficients_vec(vec![*gamma])),
         )
         .mul(
             &(cx.clone()
-                + compiled_circuit
-                    .copy_constraints()
-                    .get_s_sigma_3()
-                    .mul(*beta)
+                + compiled_circuit.copy_constraints().s_sigma_3().mul(*beta)
                 + DensePolynomial::from_coefficients_vec(vec![*gamma])),
         )
         .mul(*alpha)

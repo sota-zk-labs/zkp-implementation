@@ -1,8 +1,9 @@
-use crate::types::Polynomial;
 use ark_bls12_381::Fr;
 
+use crate::types::Polynomial;
+
 /// Represents gate constraints for a compiled circuit.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct GateConstraints {
     /// Polynomial representing the constraint function for the A wire.
     f_ax: Polynomial,
@@ -51,6 +52,7 @@ impl GateConstraints {
         }
     }
 
+    // Accessor methods for each constraint polynomial
     pub fn f_ax(&self) -> &Polynomial {
         &self.f_ax
     }
@@ -81,13 +83,13 @@ impl GateConstraints {
 }
 
 /// Represents copy constraints for a compiled circuit.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CopyConstraints {
-    /// Polynomial representing the first prescribe function (sigma_1).
+    /// Polynomial representing the first prescribed function (sigma_1).
     s_sigma_1: Polynomial,
-    /// Polynomial representing the second prescribe function (sigma_2).
+    /// Polynomial representing the second prescribed function (sigma_2).
     s_sigma_2: Polynomial,
-    /// Polynomial representing the third prescribe function (sigma_3).
+    /// Polynomial representing the third prescribed function (sigma_3).
     s_sigma_3: Polynomial,
     /// First constant factor used in copy constraint calculations.
     k1: Fr,
@@ -113,15 +115,16 @@ impl CopyConstraints {
         }
     }
 
-    pub fn get_s_sigma_1(&self) -> &Polynomial {
+    // Accessor methods for each constraint polynomial and constants
+    pub fn s_sigma_1(&self) -> &Polynomial {
         &self.s_sigma_1
     }
 
-    pub fn get_s_sigma_2(&self) -> &Polynomial {
+    pub fn s_sigma_2(&self) -> &Polynomial {
         &self.s_sigma_2
     }
 
-    pub fn get_s_sigma_3(&self) -> &Polynomial {
+    pub fn s_sigma_3(&self) -> &Polynomial {
         &self.s_sigma_3
     }
 
