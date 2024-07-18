@@ -19,8 +19,7 @@ pub(crate) struct SlicePoly {
 
 impl SlicePoly {
     /// Creates a new slice polynomial with the given polynomial and degree.
-    pub fn new(polynomial: Polynomial, degree: usize) -> Self {
-        assert!(polynomial.degree() <= 3 * degree + 5);
+    pub fn new(polynomial: Polynomial) -> Self {
         let coefficients = polynomial.coeffs;
 
         let mut tmp = coefficients.len() / 3;
@@ -67,5 +66,47 @@ impl SlicePoly {
             })
             .reduce(|one, other| one + other)
             .unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ark_ff::{Field, UniformRand};
+    use ark_std::test_rng;
+
+    use super::*;
+
+    #[test]
+    fn test_slice_poly() {
+        let rng = &mut test_rng();
+        let degree = 3;
+        let coeffs: Vec<Fr> = (0..12).map(|_| Fr::rand(rng)).collect();
+        let poly = Polynomial::from_coefficients_vec(coeffs.clone());
+
+        let slice_poly = SlicePoly::new(poly.clone());
+        assert_eq!(slice_poly.get_degree(), degree);
+
+        // Test the slices
+        for (i, slice) in slice_poly.slices.iter().enumerate() {
+            let expected_coeffs = &coeffs[i * (degree + 1)..(i + 1) * (degree + 1)];
+            assert_eq!(slice.coeffs(), expected_coeffs);
+        }
+
+        // Test compacting the polynomial
+        let point = Fr::rand(rng);
+        let compacted_poly = slice_poly.compact(&point);
+        let expected_poly = (0..3)
+            .map(|i| {
+                let exp = (degree + 1) * i;
+                let coeff = point.pow([exp as u64]);
+                Polynomial::from_coefficients_slice(
+                    &coeffs[i * (degree + 1)..(i + 1) * (degree + 1)],
+                )
+                .mul(coeff)
+            })
+            .reduce(|a, b| a + b)
+            .unwrap();
+
+        assert_eq!(compacted_poly, expected_poly);
     }
 }
