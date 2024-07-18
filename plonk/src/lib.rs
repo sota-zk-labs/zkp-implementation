@@ -1,8 +1,10 @@
 mod challenge;
 pub mod circuit;
+pub mod common_preprocessed_input;
 pub mod compiled_circuit;
 pub mod constraint;
 pub mod gate;
+pub mod parser;
 pub mod prover;
 mod slice_polynomial;
 pub mod types;
