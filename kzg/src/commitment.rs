@@ -49,7 +49,7 @@ mod tests {
                 .mul(poly.evaluate(&secret))
                 .into_affine()
         );
-        let opening = scheme.open(poly, d);
+        let opening = scheme.open(&poly, d);
         assert!(scheme.verify(&commitment, &opening, d));
     }
 
@@ -111,7 +111,7 @@ mod tests {
         let openings: Vec<KzgOpening> = f
             .iter()
             .zip(z)
-            .map(|(f_i, z_i)| scheme.open(f_i.clone(), z_i))
+            .map(|(f_i, z_i)| scheme.open(f_i, z_i))
             .collect();
         let c: Vec<KzgCommitment> = f.iter().map(|f_i| scheme.commit(f_i)).collect();
         let mut rng = StdRng::from_entropy();
