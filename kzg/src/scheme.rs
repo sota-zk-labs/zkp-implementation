@@ -89,14 +89,16 @@ impl KzgScheme {
     /// # Returns
     ///
     /// The opening at the specified point.
-    pub fn open(&self, mut polynomial: Poly, z: impl Into<Fr>) -> KzgOpening {
+    pub fn open(&self, polynomial: &Poly, z: impl Into<Fr>) -> KzgOpening {
         let z = z.into();
         let evaluation_at_z = polynomial.evaluate(&z);
-        let first = polynomial.coeffs.first_mut().expect("at least 1");
+        let mut new_poly = polynomial.clone();
+        let first = new_poly.coeffs.first_mut().expect("at least 1");
         *first -= evaluation_at_z;
         let root = Poly::from_coefficients_slice(&[-z, 1.into()]);
-        let new_poly = &polynomial / &root;
-        let opening = self.evaluate_in_s(&new_poly);
+        // quotient polynomial
+        let quotient_poly = &new_poly / &root;
+        let opening = self.evaluate_in_s(&quotient_poly);
 
         KzgOpening(opening, evaluation_at_z)
     }
@@ -123,7 +125,9 @@ impl KzgScheme {
         let g2 = self.0.g2();
         let a = g2s.sub(g2.mul(z.into()).into_affine());
         let b = commitment.0.sub(G1Point::generator().mul(y).into_affine());
+        // e([Q]_1, [x]_2 - G_2 ⋅ z)
         let pairing1 = Bls12_381::pairing(opening.0, a);
+        // e([P]_1 - G_1 ⋅ P(x), G_2)
         let pairing2 = Bls12_381::pairing(b, g2);
         pairing1 == pairing2
     }

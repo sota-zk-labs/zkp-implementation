@@ -6,7 +6,8 @@ use crate::types::G1Point;
 
 /// Represents an opening at a point with its corresponding evaluation.
 ///
-/// `KzgOpening` encapsulates a `G1Point` representing the point and an `Fr` representing the evaluation.
+/// `KzgOpening` encapsulates a `G1Point` representing the corresponding point
+/// of quotient polynomial and an `Fr` representing the evaluation.
 #[derive(Debug, Clone)]
 pub struct KzgOpening(pub G1Point, pub Fr);
 
