@@ -6,13 +6,14 @@ use ark_ec::pairing::Pairing;
 use ark_ec::short_weierstrass::Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{One, Zero};
+use ark_poly::univariate::DensePolynomial;
 use ark_poly::{DenseUVPolynomial, Polynomial};
 use rand::{Rng, RngCore};
 
 use crate::commitment::KzgCommitment;
 use crate::opening::KzgOpening;
 use crate::srs::Srs;
-use crate::types::{G1Point, Poly};
+use crate::types::{G1Point, Poly, ScalarField};
 
 /// Implements the KZG polynomial commitment scheme.
 ///
@@ -47,6 +48,21 @@ impl KzgScheme {
     /// The commitment to the polynomial.
     pub fn commit(&self, polynomial: &Poly) -> KzgCommitment {
         let commitment = self.evaluate_in_s(polynomial);
+        KzgCommitment(commitment)
+    }
+
+    /// Commits to a coefficient vector using the KZG scheme.
+    ///
+    /// # Parameters
+    ///
+    /// - `coeffs`: The coefficient vector to be committed to.
+    ///
+    /// # Returns
+    ///
+    /// The commitment to the polynomial.
+    pub fn commit_vector(&self, coeffs: &[ScalarField]) -> KzgCommitment {
+        let new_poly = DensePolynomial::from_coefficients_vec(coeffs.into());
+        let commitment = self.evaluate_in_s(&new_poly);
         KzgCommitment(commitment)
     }
 
@@ -100,6 +116,28 @@ impl KzgScheme {
         let quotient_poly = &new_poly / &root;
         let opening = self.evaluate_in_s(&quotient_poly);
 
+        KzgOpening(opening, evaluation_at_z)
+    }
+
+    /// Opens a commitment at a specified point.
+    ///
+    /// # Parameters
+    ///
+    /// - `coeffs`: The coefficient vector to be opened.
+    /// - `z`: The point at which the polynomial is opened.
+    ///
+    /// # Returns
+    ///
+    /// The opening at the specified point.
+    pub fn open_vector(&self, coeffs: &[ScalarField], z: impl Into<Fr>) -> KzgOpening {
+        let z = z.into();
+        let mut polynomial = DensePolynomial::from_coefficients_vec(coeffs.into());
+        let evaluation_at_z = polynomial.evaluate(&z);
+        let first = polynomial.coeffs.first_mut().expect("at least 1");
+        *first -= evaluation_at_z;
+        let root = Poly::from_coefficients_slice(&[-z, 1.into()]);
+        let quotient_poly = &polynomial / &root;
+        let opening = self.evaluate_in_s(&quotient_poly);
         KzgOpening(opening, evaluation_at_z)
     }
 

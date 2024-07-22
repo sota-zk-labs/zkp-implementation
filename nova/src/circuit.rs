@@ -1,14 +1,13 @@
-use std::marker::PhantomData;
-use std::ops::Add;
-use ark_ff::{BigInteger, One, PrimeField, Zero};
-use ark_serialize::CanonicalSerialize;
-use sha2::Digest;
-use kzg::commitment::KzgCommitment;
-use kzg::types::{BaseField, ScalarField};
-use crate::nifs::{NIFS};
+use crate::nifs::NIFS;
 use crate::r1cs::{FInstance, FWitness};
 use crate::transcript::Transcript;
-
+use ark_ff::{BigInteger, One, PrimeField, Zero};
+use ark_serialize::CanonicalSerialize;
+use kzg::commitment::KzgCommitment;
+use kzg::types::{BaseField, ScalarField};
+use sha2::Digest;
+use std::marker::PhantomData;
+use std::ops::Add;
 
 /// State structure of IVC, which is presented in BaseField of Bsn12_381 curve
 /// Todo: Implement a general version.
@@ -22,7 +21,6 @@ pub trait FCircuit {
     // return state z_{i+1} = F(z_i, w_i)
     fn run(&self, z_i: &State, w_i: &FWitness) -> State;
 }
-
 
 /// F' circuit
 pub struct AugmentedCircuit<T: Digest + Default + ark_serialize::Write, FC: FCircuit> {
@@ -46,13 +44,8 @@ pub struct AugmentedCircuit<T: Digest + Default + ark_serialize::Write, FC: FCir
 }
 
 #[allow(dead_code)]
-impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircuit <T, FC> {
-
-    pub fn new(
-        f_circuit: FC,
-        trivial_instance: &FInstance,
-        z_0: &State,
-    ) -> Self {
+impl<T: Digest + Default + ark_serialize::Write, FC: FCircuit> AugmentedCircuit<T, FC> {
+    pub fn new(f_circuit: FC, trivial_instance: &FInstance, z_0: &State) -> Self {
         Self {
             f_circuit,
             i: BaseField::zero(),
@@ -62,7 +55,7 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             z_i1: None,
             h_i: None,
             h_i1: None,
-            phantom_data_t: PhantomData
+            phantom_data_t: PhantomData,
         }
     }
     pub fn run(
@@ -71,10 +64,8 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
         big_u_i: Option<&FInstance>,
         w_i: &FWitness,
         com_t: Option<&KzgCommitment>,
-    ) -> Result<BaseField, String>{
-
+    ) -> Result<BaseField, String> {
         if self.i != BaseField::from(0) {
-
             // check that if i > 0 then U_i and com_t must exist
             if big_u_i.is_none() || com_t.is_none() {
                 return Err(String::from("Wrong parameters."));
@@ -82,18 +73,18 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
 
             // check that if i > 0 then the hash_x must exist
             if self.h_i.is_none() {
-                return Err(String::from("The hash public IO must exist"))
+                return Err(String::from("The hash public IO must exist"));
             }
 
             // get hash_x
-            let hash_x = self.h_i.clone().unwrap();
+            let hash_x = self.h_i.unwrap();
 
             // 1. check that u.x =? hash_x
             // Because u_i.x is in ScalarField while hash_x is in BaseField, they need to
             // be converted into a comparable type
             // Todo: Non-native field transform
 
-            let u_dot_x = u_i.x[0].clone();
+            let u_dot_x = u_i.x[0];
             let hash_fr = ScalarField::from_le_bytes_mod_order(&hash_x.into_bigint().to_bytes_le());
             if u_dot_x != hash_fr {
                 return Err(String::from("Public IO is wrong "));
@@ -122,20 +113,21 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
             let z_i1 = self.f_circuit.run(&self.z_i, w_i);
 
             // compute hash
-            let new_hash= Self::hash_io(self.i.add(BaseField::one()), &self.z_0, &z_i1, &big_u_i1);
+            let new_hash = Self::hash_io(self.i.add(BaseField::one()), &self.z_0, &z_i1, &big_u_i1);
 
             // store the next hash
             self.h_i1 = Some(new_hash);
             // store the next state
             self.z_i1 = Some(z_i1);
-
-        } else { // i == 0
+        } else {
+            // i == 0
 
             // compute z_1 = F(z_0, w_i)
             let z_i1 = self.f_circuit.run(&self.z_i, w_i);
 
             // compute hash
-            let new_hash = Self::hash_io(BaseField::one(), &self.z_0, &z_i1, &self.trivial_instance);
+            let new_hash =
+                Self::hash_io(BaseField::one(), &self.z_0, &z_i1, &self.trivial_instance);
 
             // store the next hash
             self.h_i1 = Some(new_hash);
@@ -144,25 +136,20 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
         }
 
         // 4. output the hash
-        return Ok(self.h_i1.unwrap());
+        Ok(self.h_i1.unwrap())
     }
 
-    /// updating F' function for the next step of IVC.
+    /// Updating F' function for the next step of IVC.
     pub fn next_step(&mut self) {
         self.z_i = self.z_i1.clone().unwrap();
         self.z_i1 = None;
-        self.i = self.i + BaseField::one();
+        self.i += BaseField::one();
         self.h_i = self.h_i1;
         self.h_i1 = None;
     }
 
     /// A function computes public IO of an instance: u.x = hash(i, z0, zi, Ui).
-    pub fn hash_io(
-        i: BaseField,
-        z_0: &State,
-        z_i: &State,
-        big_u_i: &FInstance
-    ) -> BaseField {
+    pub fn hash_io(i: BaseField, z_0: &State, z_i: &State, big_u_i: &FInstance) -> BaseField {
         let mut hasher = T::default();
         i.serialize_uncompressed(&mut hasher).unwrap();
         z_0.state.serialize_uncompressed(&mut hasher).unwrap();
@@ -184,23 +171,23 @@ impl <T: Digest + Default + ark_serialize::Write, FC: FCircuit > AugmentedCircui
 #[cfg(test)]
 #[allow(dead_code)]
 mod test {
-    use sha2::Sha256;
-    use kzg::scheme::KzgScheme;
-    use kzg::srs::Srs;
+    use super::*;
     use crate::nifs::nifs_verifier::gen_test_values;
     use crate::r1cs::create_trivial_pair;
-    use super::*;
+    use kzg::scheme::KzgScheme;
+    use kzg::srs::Srs;
+    use sha2::Sha256;
 
     struct TestCircuit {}
     impl FCircuit for TestCircuit {
         fn run(&self, z_i: &State, w_i: &FWitness) -> State {
-            let x = w_i.w[0].clone();
+            let x = w_i.w[0];
             let res = x * x * x + x + ScalarField::from(5);
             // because res is in scalar field, we need to convert it into base_field
             let base_res = BaseField::from_le_bytes_mod_order(&res.into_bigint().to_bytes_le());
 
             State {
-                state: z_i.state + base_res
+                state: z_i.state + base_res,
             }
         }
     }
@@ -209,7 +196,11 @@ mod test {
     fn test_augmented_circuit_01() {
         // generate R1CS, witnesses and public input, output.
         let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3]);
-        let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
+        let (matrix_a, _, _) = (
+            r1cs.matrix_a.clone(),
+            r1cs.matrix_b.clone(),
+            r1cs.matrix_c.clone(),
+        );
 
         // Trusted setup
         let domain_size = witnesses[0].len() + x[0].len() + 1;
@@ -223,11 +214,15 @@ mod test {
         let (_, trivial_instance) = create_trivial_pair(x[0].len(), witnesses[0].len(), &scheme);
 
         // generate f_circuit instance
-        let f_circuit = TestCircuit{};
+        let f_circuit = TestCircuit {};
 
         // generate state
-        let z_0 = State{state: BaseField::from(0)};
-        let z_1 = State{state: BaseField::from(35)};
+        let z_0 = State {
+            state: BaseField::from(0),
+        };
+        let z_1 = State {
+            state: BaseField::from(35),
+        };
         // let prover_transcript = Transcript::<Sha256>::default();
 
         // create F'
@@ -240,25 +235,28 @@ mod test {
             z_i1: None,
             h_i: None,
             h_i1: None,
-            phantom_data_t: PhantomData
+            phantom_data_t: PhantomData,
         };
 
-        let res1 = augmented_circuit.run(
-            &u_0,
-            None,
-            &w_0,
-            None,
-        );
+        let res1 = augmented_circuit.run(&u_0, None, &w_0, None);
 
         // check if F' is running
         if res1.is_err() {
-            println!("{:?}",res1);
+            println!("{:?}", res1);
         }
 
         assert!(res1.is_ok());
         let hash = res1.unwrap();
         // check if the hash output is correct
-        assert_eq!(hash, AugmentedCircuit::<Sha256, TestCircuit>::hash_io(BaseField::one(), &z_0, &z_1, &trivial_instance));
+        assert_eq!(
+            hash,
+            AugmentedCircuit::<Sha256, TestCircuit>::hash_io(
+                BaseField::one(),
+                &z_0,
+                &z_1,
+                &trivial_instance
+            )
+        );
         augmented_circuit.next_step();
         // check if the state produced is correct
         assert_eq!(augmented_circuit.z_i.state, z_1.state);
@@ -268,7 +266,11 @@ mod test {
     fn test_augmented_circuit_02() {
         // generate R1CS, witnesses and public input, output.
         let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4]);
-        let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
+        let (matrix_a, _, _) = (
+            r1cs.matrix_a.clone(),
+            r1cs.matrix_b.clone(),
+            r1cs.matrix_c.clone(),
+        );
 
         // Trusted setup
         let domain_size = witnesses[0].len() + x[0].len() + 1;
@@ -279,22 +281,44 @@ mod test {
         let mut u_1 = w_1.commit(&scheme, &x[1]);
 
         // generate trivial_instance
-        let (trivial_witness, trivial_instance) = create_trivial_pair(x[0].len(), witnesses[0].len(), &scheme);
+        let (trivial_witness, trivial_instance) =
+            create_trivial_pair(x[0].len(), witnesses[0].len(), &scheme);
 
         // generate f_circuit instance
-        let f_circuit = TestCircuit{};
+        let f_circuit = TestCircuit {};
 
         // generate state
-        let z_0 = State{state: BaseField::from(0)};
-        let z_1 = State{state: BaseField::from(35)};
-        let z_2 = State{state: BaseField::from(108)};
+        let z_0 = State {
+            state: BaseField::from(0),
+        };
+        let z_1 = State {
+            state: BaseField::from(35),
+        };
+        let z_2 = State {
+            state: BaseField::from(108),
+        };
         let mut prover_transcript = Transcript::<Sha256>::default();
 
-        let u_1_x = AugmentedCircuit::<Sha256, TestCircuit>::hash_io(BaseField::from(1), &z_0, &z_1, &trivial_instance);
+        let u_1_x = AugmentedCircuit::<Sha256, TestCircuit>::hash_io(
+            BaseField::from(1),
+            &z_0,
+            &z_1,
+            &trivial_instance,
+        );
         // convert u_1_x from BaseField into ScalarField
-        u_1.x = vec![ScalarField::from_le_bytes_mod_order(&u_1_x.into_bigint().to_bytes_le())];
+        u_1.x = vec![ScalarField::from_le_bytes_mod_order(
+            &u_1_x.into_bigint().to_bytes_le(),
+        )];
 
-        let (_, folded_instance, com_t, _) = NIFS::<Sha256>::prover(&r1cs, &w_1, &trivial_witness, &u_1, &trivial_instance, &scheme, &mut prover_transcript);
+        let (_, folded_instance, com_t, _) = NIFS::<Sha256>::prover(
+            &r1cs,
+            &w_1,
+            &trivial_witness,
+            &u_1,
+            &trivial_instance,
+            &scheme,
+            &mut prover_transcript,
+        );
 
         // create F'
         let mut augmented_circuit = AugmentedCircuit::<Sha256, TestCircuit> {
@@ -306,39 +330,43 @@ mod test {
             z_i1: None,
             h_i: Some(u_1_x),
             h_i1: None,
-            phantom_data_t: PhantomData
+            phantom_data_t: PhantomData,
         };
 
-
-
-        let res1 = augmented_circuit.run(
-            &u_1,
-            Some(&trivial_instance),
-            &w_1,
-            Some(&com_t)
-        );
+        let res1 = augmented_circuit.run(&u_1, Some(&trivial_instance), &w_1, Some(&com_t));
 
         // check if F' is running
         if res1.is_err() {
-            println!("{:?}",res1);
+            println!("{:?}", res1);
         }
 
         assert!(res1.is_ok());
         let hash = res1.unwrap();
         // check if the hash output is correct
-        assert_eq!(hash, AugmentedCircuit::<Sha256, TestCircuit>::hash_io(BaseField::from(2), &z_0, &z_2, &folded_instance));
+        assert_eq!(
+            hash,
+            AugmentedCircuit::<Sha256, TestCircuit>::hash_io(
+                BaseField::from(2),
+                &z_0,
+                &z_2,
+                &folded_instance
+            )
+        );
         augmented_circuit.next_step();
         // check if the state produced is correct
         assert_eq!(augmented_circuit.z_i.state, z_2.state);
     }
-
 
     #[test]
     #[should_panic]
     fn test_augmented_circuit_03() {
         // generate R1CS, witnesses and public input, output.
         let (r1cs, witnesses, x) = gen_test_values::<ScalarField>(vec![3, 4]);
-        let (matrix_a, _, _) = (r1cs.matrix_a.clone(), r1cs.matrix_b.clone(), r1cs.matrix_c.clone());
+        let (matrix_a, _, _) = (
+            r1cs.matrix_a.clone(),
+            r1cs.matrix_b.clone(),
+            r1cs.matrix_c.clone(),
+        );
 
         // Trusted setup
         let domain_size = witnesses[0].len() + x[0].len() + 1;
@@ -349,22 +377,44 @@ mod test {
         let mut u_1 = w_1.commit(&scheme, &x[1]);
 
         // generate trivial_instance
-        let (trivial_witness, trivial_instance) = create_trivial_pair(x[0].len(), witnesses[0].len(), &scheme);
+        let (trivial_witness, trivial_instance) =
+            create_trivial_pair(x[0].len(), witnesses[0].len(), &scheme);
 
         // generate f_circuit instance
-        let f_circuit = TestCircuit{};
+        let f_circuit = TestCircuit {};
 
         // generate state
-        let z_0 = State{state: BaseField::from(0)};
-        let z_1 = State{state: BaseField::from(35)};
-        let z_2 = State{state: BaseField::from(130)};
+        let z_0 = State {
+            state: BaseField::from(0),
+        };
+        let z_1 = State {
+            state: BaseField::from(35),
+        };
+        let z_2 = State {
+            state: BaseField::from(130),
+        };
         let mut prover_transcript = Transcript::<Sha256>::default();
 
-        let u_1_x = AugmentedCircuit::<Sha256, TestCircuit>::hash_io(BaseField::from(1), &z_0, &z_1, &trivial_instance);
+        let u_1_x = AugmentedCircuit::<Sha256, TestCircuit>::hash_io(
+            BaseField::from(1),
+            &z_0,
+            &z_1,
+            &trivial_instance,
+        );
         // convert u_1_x from BaseField into ScalarField
-        u_1.x = vec![ScalarField::from_le_bytes_mod_order(&u_1_x.into_bigint().to_bytes_le())];
+        u_1.x = vec![ScalarField::from_le_bytes_mod_order(
+            &u_1_x.into_bigint().to_bytes_le(),
+        )];
 
-        let (_, folded_instance, com_t, _) = NIFS::<Sha256>::prover(&r1cs, &w_1, &trivial_witness, &u_1, &trivial_instance, &scheme, &mut prover_transcript);
+        let (_, folded_instance, com_t, _) = NIFS::<Sha256>::prover(
+            &r1cs,
+            &w_1,
+            &trivial_witness,
+            &u_1,
+            &trivial_instance,
+            &scheme,
+            &mut prover_transcript,
+        );
 
         // create F'
         let mut augmented_circuit = AugmentedCircuit::<Sha256, TestCircuit> {
@@ -376,27 +426,28 @@ mod test {
             z_i1: None,
             h_i: Some(u_1_x),
             h_i1: None,
-            phantom_data_t: PhantomData
+            phantom_data_t: PhantomData,
         };
 
-
-
-        let res1 = augmented_circuit.run(
-            &u_1,
-            Some(&trivial_instance),
-            &w_1,
-            Some(&com_t)
-        );
+        let res1 = augmented_circuit.run(&u_1, Some(&trivial_instance), &w_1, Some(&com_t));
 
         // check if F' is running
         if res1.is_err() {
-            println!("{:?}",res1);
+            println!("{:?}", res1);
         }
 
         assert!(res1.is_ok());
         let hash = res1.unwrap();
         // check if the hash output is correct
-        assert_eq!(hash, AugmentedCircuit::<Sha256, TestCircuit>::hash_io(BaseField::from(2), &z_0, &z_2, &folded_instance));
+        assert_eq!(
+            hash,
+            AugmentedCircuit::<Sha256, TestCircuit>::hash_io(
+                BaseField::from(2),
+                &z_0,
+                &z_2,
+                &folded_instance
+            )
+        );
         augmented_circuit.next_step();
         // check if the state produced is correct
         assert_eq!(augmented_circuit.z_i.state, z_2.state);

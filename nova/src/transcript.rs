@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use ark_bls12_381::Fr;
-use ark_ff::{UniformRand};
+use ark_ff::UniformRand;
 use ark_serialize::{CanonicalSerialize, Write};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -81,8 +81,7 @@ impl<T: Digest + Default> Transcript<T> {
     pub fn feed_scalar_num(&mut self, num: ScalarField) {
         let mut hasher = T::default();
         hasher.update(self.data.take().unwrap_or_default());
-        num
-            .serialize_uncompressed(HashMarshaller(&mut hasher))
+        num.serialize_uncompressed(HashMarshaller(&mut hasher))
             .expect("HashMarshaller::flush should be infallible!");
         self.data = Some(hasher.finalize().to_vec());
         self.generated = false;
@@ -136,11 +135,10 @@ impl<'a, H: Digest> Write for HashMarshaller<'a, H> {
 mod tests {
     use std::ops::Mul;
 
-    use ark_ec::{AffineRepr, CurveGroup};
-    use sha2::Sha256;
-    use kzg::types::G1Point;
     use ark_bls12_381::Fr;
-
+    use ark_ec::{AffineRepr, CurveGroup};
+    use kzg::types::G1Point;
+    use sha2::Sha256;
 
     use super::*;
 
@@ -153,8 +151,7 @@ mod tests {
             Transcript::<Sha256>::from_commitment(&commitments1).generate_challenges();
 
         let commitments2: [KzgCommitment; 1] = [commitment2.clone()];
-        let [b] =
-            Transcript::<Sha256>::from_commitment(&commitments2).generate_challenges();
+        let [b] = Transcript::<Sha256>::from_commitment(&commitments2).generate_challenges();
         assert_ne!(a, b, "should be different");
 
         let commitments3: [KzgCommitment; 2] = [commitment1.clone(), commitment2.clone()];
@@ -170,8 +167,8 @@ mod tests {
         let a = ScalarField::from(15);
         let b = ScalarField::from(20);
 
-        let [x, y, z] = Transcript::<Sha256>::from_scalar_number(&vec![a, b]).generate_challenges();
-        let [x1, y1, z1] = Transcript::<Sha256>::from_scalar_number(&vec![a, b]).generate_challenges();
+        let [x, y, z] = Transcript::<Sha256>::from_scalar_number(&[a, b]).generate_challenges();
+        let [x1, y1, z1] = Transcript::<Sha256>::from_scalar_number(&[a, b]).generate_challenges();
 
         assert_eq!(x, x1, "should be equal");
         assert_eq!(y, y1, "should be equal");
@@ -182,8 +179,10 @@ mod tests {
     fn transcript_test_02() {
         let a = ScalarField::from(15);
         let b = ScalarField::from(20);
-        let commitment1 = KzgCommitment(G1Point::generator().mul(ScalarField::from(1)).into_affine());
-        let commitment2 = KzgCommitment(G1Point::generator().mul(ScalarField::from(2)).into_affine());
+        let commitment1 =
+            KzgCommitment(G1Point::generator().mul(ScalarField::from(1)).into_affine());
+        let commitment2 =
+            KzgCommitment(G1Point::generator().mul(ScalarField::from(2)).into_affine());
 
         let mut ts1 = Transcript::<Sha256>::default();
         let mut ts2 = Transcript::<Sha256>::default();
@@ -201,7 +200,6 @@ mod tests {
         assert_eq!(x, x1, "should be equal");
         assert_eq!(y, y1, "should be equal");
         assert_eq!(z, z1, "should be equal");
-
     }
 
     #[test]
