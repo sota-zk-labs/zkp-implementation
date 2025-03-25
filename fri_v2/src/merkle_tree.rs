@@ -1,24 +1,43 @@
-use crate::hasher::FRIHasher;
+use crate::errors::FriError;
+use crate::hasher::Hasher;
+use ark_ff::PrimeField;
+use std::marker::PhantomData;
 
 pub struct FriMerkleTree<T, H>
 where
-    H: FRIHasher<T>,
+    H: Hasher<T>,
+    T: PrimeField,
 {
-    // pub root: T,
-    // pub leaves: Vec<T>,
     pub nodes: Vec<Vec<T>>,
+
+    _phantom: PhantomData<H>,
 }
 
-impl<T, H: FRIHasher<T>> FriMerkleTree<T, H> {
-    pub fn new(vals: Vec<T>) -> Self {
+impl<T: PrimeField, H: Hasher<T>> FriMerkleTree<T, H> {
+    pub fn new(vals: Vec<T>) -> Result<Self, FriError> {
+        if vals.len() > 1 && vals.len() % 2 != 0 {
+            return Err(FriError::UnevenTree);
+        }
+
         let mut cur = vals;
         let mut nodes = vec![];
-        while cur.len() > 0 {
-            let a = cur.chunks(2).map(|data| H::hash(data)).collect::<Vec<_>>();
+        while cur.len() > 1 {
+            let a = cur
+                .chunks(2)
+                .map(|data| {
+                    let mut di = H::default();
+                    di.digest_vec(data);
+                    di.finalize()
+                })
+                .collect::<Vec<_>>();
             nodes.push(cur);
             cur = a;
         }
+        nodes.push(cur);
 
-        Self { nodes }
+        Ok(Self {
+            nodes,
+            _phantom: Default::default(),
+        })
     }
 }
